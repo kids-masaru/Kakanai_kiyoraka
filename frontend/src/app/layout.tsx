@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { EditorProvider } from "@/context/EditorContext";
 
 export const metadata: Metadata = {
   title: "介護DX カカナイ",
@@ -32,8 +33,11 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon.jpg" />
       </head>
       <body className="antialiased bg-gray-50 min-h-screen">
-        {children}
+        <EditorProvider>
+          {children}
+        </EditorProvider>
       </body>
     </html>
   );
 }
+

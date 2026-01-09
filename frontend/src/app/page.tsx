@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Link from "next/link";
 import { getPresignedUrl, uploadToR2, analyzeAudio } from "@/lib/api";
 
 type DocumentType = "assessment" | "service_meeting" | "management_meeting";
@@ -41,10 +42,19 @@ interface ServiceMeetingFormData {
 }
 
 interface Settings {
-  spreadsheetId: string;
-  sheetName: string;
+  assessmentSheetId: string;
+  serviceMeetingSheetId: string;
+  managementMeetingSheetId: string;
   geminiModel: string;
 }
+
+// Default spreadsheet IDs from original app
+const DEFAULT_SETTINGS: Settings = {
+  assessmentSheetId: "1H_jUc8jU4youPNUae5KBvPKljGTT4v13MKaRUiKoujI",
+  serviceMeetingSheetId: "1ufwuCz0dCxiqL6PmlpqziD82lvaVI4ucong13NAY7Wg",
+  managementMeetingSheetId: "1SlRGB0NVaTm_AoAyR4hqsA8b1rNz95fbUUELs0o-yI8",
+  geminiModel: "gemini-3-flash-preview",
+};
 
 const documentTypes: { value: DocumentType; label: string }[] = [
   { value: "assessment", label: "アセスメントシート" },
@@ -60,7 +70,7 @@ const meetingCountOptions = ["第1回", "第2回", "第3回", "第4回", "第5�
 const timeOptions = Array.from({ length: 25 }, (_, i) => `${String(i).padStart(2, '0')}:00`).concat(
   Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:30`)
 ).sort();
-const geminiModels = ["gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro"];
+const geminiModels = ["gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.0-flash"];
 
 // SVG Icons
 const SettingsIcon = () => (
@@ -82,12 +92,6 @@ const UploadIcon = () => (
   </svg>
 );
 
-const CheckIcon = () => (
-  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-  </svg>
-);
-
 export default function Home() {
   const [selectedType, setSelectedType] = useState<DocumentType>("assessment");
   const [file, setFile] = useState<File | null>(null);
@@ -98,11 +102,7 @@ export default function Home() {
     message: "",
   });
 
-  const [settings, setSettings] = useState<Settings>({
-    spreadsheetId: "",
-    sheetName: "",
-    geminiModel: "gemini-2.5-pro",
-  });
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
 
   const [assessmentForm, setAssessmentForm] = useState<AssessmentFormData>({
     受付対応者: "",
@@ -148,6 +148,14 @@ export default function Home() {
     }
   };
 
+  const getCurrentSpreadsheetId = () => {
+    switch (selectedType) {
+      case "assessment": return settings.assessmentSheetId;
+      case "service_meeting": return settings.serviceMeetingSheetId;
+      case "management_meeting": return settings.managementMeetingSheetId;
+    }
+  };
+
   const handleUpload = async () => {
     if (!file) return;
     try {
@@ -159,7 +167,7 @@ export default function Home() {
       const analysisType = selectedType === "assessment" ? "assessment" : "meeting";
       const result = await analyzeAudio(file_key, analysisType);
       if (result.success) {
-        setUploadState({ status: "complete", progress: 100, message: "分析完了！", result: { ...result.data, formInput: getFormData() } });
+        setUploadState({ status: "complete", progress: 100, message: "分析完了！", result: { ...result.data, formInput: getFormData(), spreadsheetId: getCurrentSpreadsheetId() } });
       } else {
         throw new Error(result.error || "分析に失敗しました");
       }
@@ -307,23 +315,16 @@ export default function Home() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">スプレッドシートID</label>
-            <input type="text" value={settings.spreadsheetId} onChange={(e) => setSettings({ ...settings, spreadsheetId: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="1abc123..." />
+            <label className="block text-sm font-medium text-gray-700 mb-1">アセスメントシートID</label>
+            <input type="text" value={settings.assessmentSheetId} onChange={(e) => setSettings({ ...settings, assessmentSheetId: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-xs" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">シート名（任意）</label>
-            <input type="text" value={settings.sheetName} onChange={(e) => setSettings({ ...settings, sheetName: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="シート1" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">サービス担当者会議ID</label>
+            <input type="text" value={settings.serviceMeetingSheetId} onChange={(e) => setSettings({ ...settings, serviceMeetingSheetId: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-xs" />
           </div>
-          <div className="pt-4 border-t border-gray-200">
-            <a href="https://genogram-editor.vercel.app" target="_blank" rel="noopener noreferrer" className="block w-full text-center py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg">
-              ジェノグラム編集
-            </a>
-            <a href="https://genogram-editor.vercel.app/body-map" target="_blank" rel="noopener noreferrer" className="block w-full text-center py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg">
-              身体図編集
-            </a>
-            <a href="https://genogram-editor.vercel.app/house-plan" target="_blank" rel="noopener noreferrer" className="block w-full text-center py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg">
-              家屋図編集
-            </a>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">運営会議ID</label>
+            <input type="text" value={settings.managementMeetingSheetId} onChange={(e) => setSettings({ ...settings, managementMeetingSheetId: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-xs" />
           </div>
         </div>
       </div>
@@ -338,19 +339,22 @@ export default function Home() {
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img src="/icon.jpg" alt="カカナイ" className="w-9 h-9 rounded-lg" />
-              <div>
-                <h1 className="text-lg font-bold text-gray-900">介護DX カカナイ</h1>
-              </div>
+              <h1 className="text-lg font-bold text-gray-900">介護DX カカナイ</h1>
             </div>
-            <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600" title="設定">
-              <SettingsIcon />
-            </button>
+            <div className="flex items-center gap-2">
+              <Link href="/genogram" className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">ジェノグラム</Link>
+              <Link href="/body-map" className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">身体図</Link>
+              <Link href="/house-plan" className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">家屋図</Link>
+              <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 ml-2" title="設定">
+                <SettingsIcon />
+              </button>
+            </div>
           </div>
         </header>
 
         {/* Main */}
         <main className="max-w-5xl mx-auto px-4 py-4">
-          {/* Document Type Selection - Compact */}
+          {/* Document Type Selection - Compact, no checkmark */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 mb-4">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-gray-700 mr-2">作成:</span>
@@ -363,7 +367,6 @@ export default function Home() {
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                 >
-                  {selectedType === type.value && <CheckIcon />}
                   {type.label}
                 </button>
               ))}
