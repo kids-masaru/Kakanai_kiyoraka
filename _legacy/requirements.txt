@@ -1,0 +1,13 @@
+streamlit
+google-generativeai
+gspread
+oauth2client
+pandas
+python-dotenv
+google-api-python-client
+google-auth
+pillow
+graphviz
+streamlit-agraph
+requests
+lzstring
