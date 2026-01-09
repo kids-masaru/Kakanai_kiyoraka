@@ -88,9 +88,19 @@ export default function Home() {
 
         {/* Quick Actions */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            関連ツール
-          </h3>
+          <div className="flex items-center gap-4 mb-6">
+            <img
+              src="/tools-icon.png"
+              alt="関連ツール"
+              className="w-16 h-16 rounded-xl"
+            />
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                関連ツール
+              </h3>
+              <p className="text-sm text-gray-500">ジェノグラム・身体図・家屋図エディター</p>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-3">
             <a
               href="https://genogram-editor.vercel.app"
