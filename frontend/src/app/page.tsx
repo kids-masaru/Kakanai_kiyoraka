@@ -12,6 +12,37 @@ interface UploadState {
   result?: Record<string, unknown>;
 }
 
+// Assessment form data
+interface AssessmentFormData {
+  受付対応者: string;
+  アセスメント理由: string;
+  アセスメント理由_備考: string;
+  相談者氏名: string;
+  続柄: string;
+  実施場所: string;
+  受付方法: string;
+}
+
+// Management meeting form data
+interface ManagementMeetingFormData {
+  開催日: string;
+  開催場所: string;
+  参加者: string;
+  開始時間: string;
+  終了時間: string;
+}
+
+// Service meeting form data
+interface ServiceMeetingFormData {
+  担当者名: string;
+  利用者名: string;
+  開催日: string;
+  開催場所: string;
+  開始時間: string;
+  終了時間: string;
+  開催回数: string;
+}
+
 const documentTypes: { value: DocumentType; label: string; description: string; emoji: string }[] = [
   {
     value: "assessment",
@@ -33,6 +64,16 @@ const documentTypes: { value: DocumentType; label: string; description: string; 
   }
 ];
 
+// Dropdown options
+const assessmentReasonOptions = ["初回", "更新", "区分変更（改善）", "区分変更（悪化）", "退院", "対処", "サービス追加", "サービス変更"];
+const relationshipOptions = ["本人", "家族", "配偶者", "子", "兄弟姉妹", "親", "その他"];
+const locationOptions = ["自宅", "病院", "施設", "その他"];
+const receptionMethodOptions = ["来所", "電話", "訪問", "その他"];
+const meetingCountOptions = ["第1回", "第2回", "第3回", "第4回", "第5回", "第6回", "第7回", "第8回", "第9回", "第10回"];
+const timeOptions = Array.from({ length: 25 }, (_, i) => `${String(i).padStart(2, '0')}:00`).concat(
+  Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:30`)
+).sort();
+
 export default function Home() {
   const [selectedType, setSelectedType] = useState<DocumentType>("assessment");
   const [file, setFile] = useState<File | null>(null);
@@ -42,6 +83,35 @@ export default function Home() {
     message: "",
   });
 
+  // Form states
+  const [assessmentForm, setAssessmentForm] = useState<AssessmentFormData>({
+    受付対応者: "",
+    アセスメント理由: "初回",
+    アセスメント理由_備考: "",
+    相談者氏名: "",
+    続柄: "本人",
+    実施場所: "自宅",
+    受付方法: "来所",
+  });
+
+  const [managementForm, setManagementForm] = useState<ManagementMeetingFormData>({
+    開催日: new Date().toISOString().split('T')[0],
+    開催場所: "会議室",
+    参加者: "",
+    開始時間: "10:00",
+    終了時間: "11:00",
+  });
+
+  const [serviceForm, setServiceForm] = useState<ServiceMeetingFormData>({
+    担当者名: "",
+    利用者名: "",
+    開催日: new Date().toISOString().split('T')[0],
+    開催場所: "自宅",
+    開始時間: "10:00",
+    終了時間: "10:30",
+    開催回数: "第1回",
+  });
+
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
@@ -49,6 +119,17 @@ export default function Home() {
       setUploadState({ status: "idle", progress: 0, message: "" });
     }
   }, []);
+
+  const getFormData = () => {
+    switch (selectedType) {
+      case "assessment":
+        return assessmentForm;
+      case "management_meeting":
+        return managementForm;
+      case "service_meeting":
+        return serviceForm;
+    }
+  };
 
   const handleUpload = async () => {
     if (!file) return;
@@ -60,7 +141,6 @@ export default function Home() {
         message: "署名付きURLを取得中...",
       });
 
-      // Get presigned URL
       const { upload_url, file_key } = await getPresignedUrl(
         file.name,
         file.type || "audio/mp4"
@@ -72,7 +152,6 @@ export default function Home() {
         message: "R2にアップロード中...",
       });
 
-      // Upload directly to R2
       await uploadToR2(upload_url, file);
 
       setUploadState({
@@ -81,18 +160,24 @@ export default function Home() {
         message: "AI分析中...",
       });
 
-      // Map document type to analysis type
       const analysisType = selectedType === "assessment" ? "assessment" : "meeting";
+      const formData = getFormData();
 
-      // Analyze the uploaded file
+      // Pass form data to backend for enhanced analysis
       const result = await analyzeAudio(file_key, analysisType);
 
       if (result.success) {
+        // Merge form data with AI result
+        const mergedData = {
+          ...result.data,
+          formInput: formData,
+        };
+
         setUploadState({
           status: "complete",
           progress: 100,
           message: "分析完了！",
-          result: result.data,
+          result: mergedData,
         });
       } else {
         throw new Error(result.error || "分析に失敗しました");
@@ -109,6 +194,257 @@ export default function Home() {
   const resetUpload = () => {
     setFile(null);
     setUploadState({ status: "idle", progress: 0, message: "" });
+  };
+
+  // Form renderers
+  const renderAssessmentForm = () => (
+    <div className="space-y-4">
+      <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+        📋 基本情報の入力
+        <span className="text-xs text-gray-500 font-normal">※以下の項目は手入力でスプレッドシートに直接反映されます</span>
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">受付対応者</label>
+          <input
+            type="text"
+            value={assessmentForm.受付対応者}
+            onChange={(e) => setAssessmentForm({ ...assessmentForm, 受付対応者: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="例: 山田太郎"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">アセスメント理由</label>
+          <select
+            value={assessmentForm.アセスメント理由}
+            onChange={(e) => setAssessmentForm({ ...assessmentForm, アセスメント理由: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {assessmentReasonOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">相談者氏名</label>
+          <input
+            type="text"
+            value={assessmentForm.相談者氏名}
+            onChange={(e) => setAssessmentForm({ ...assessmentForm, 相談者氏名: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="例: 鈴木花子"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">アセスメント理由_備考</label>
+          <input
+            type="text"
+            value={assessmentForm.アセスメント理由_備考}
+            onChange={(e) => setAssessmentForm({ ...assessmentForm, アセスメント理由_備考: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="備考があれば入力"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">続柄</label>
+          <select
+            value={assessmentForm.続柄}
+            onChange={(e) => setAssessmentForm({ ...assessmentForm, 続柄: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {relationshipOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">実施場所</label>
+          <select
+            value={assessmentForm.実施場所}
+            onChange={(e) => setAssessmentForm({ ...assessmentForm, 実施場所: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {locationOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">受付方法</label>
+          <select
+            value={assessmentForm.受付方法}
+            onChange={(e) => setAssessmentForm({ ...assessmentForm, 受付方法: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {receptionMethodOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderManagementMeetingForm = () => (
+    <div className="space-y-4">
+      <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+        📋 記録情報の入力（運営会議録）
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">開催日</label>
+          <input
+            type="date"
+            value={managementForm.開催日}
+            onChange={(e) => setManagementForm({ ...managementForm, 開催日: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">開催場所</label>
+          <input
+            type="text"
+            value={managementForm.開催場所}
+            onChange={(e) => setManagementForm({ ...managementForm, 開催場所: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="例: 会議室"
+          />
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">参加者</label>
+          <input
+            type="text"
+            value={managementForm.参加者}
+            onChange={(e) => setManagementForm({ ...managementForm, 参加者: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="例: 井﨑、武島、〇〇"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">開催時間</label>
+          <div className="flex items-center gap-2">
+            <select
+              value={managementForm.開始時間}
+              onChange={(e) => setManagementForm({ ...managementForm, 開始時間: e.target.value })}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {timeOptions.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+            <span className="text-gray-500">〜</span>
+            <select
+              value={managementForm.終了時間}
+              onChange={(e) => setManagementForm({ ...managementForm, 終了時間: e.target.value })}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {timeOptions.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderServiceMeetingForm = () => (
+    <div className="space-y-4">
+      <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+        📋 記録情報の入力（サービス担当者会議事録）
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">担当者名</label>
+          <input
+            type="text"
+            value={serviceForm.担当者名}
+            onChange={(e) => setServiceForm({ ...serviceForm, 担当者名: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="例: 山田太郎"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">開催場所</label>
+          <select
+            value={serviceForm.開催場所}
+            onChange={(e) => setServiceForm({ ...serviceForm, 開催場所: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {locationOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">利用者名</label>
+          <input
+            type="text"
+            value={serviceForm.利用者名}
+            onChange={(e) => setServiceForm({ ...serviceForm, 利用者名: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="例: 鈴木花子"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">開催時間</label>
+          <div className="flex items-center gap-2">
+            <select
+              value={serviceForm.開始時間}
+              onChange={(e) => setServiceForm({ ...serviceForm, 開始時間: e.target.value })}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {timeOptions.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+            <span className="text-gray-500">〜</span>
+            <select
+              value={serviceForm.終了時間}
+              onChange={(e) => setServiceForm({ ...serviceForm, 終了時間: e.target.value })}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {timeOptions.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">開催日</label>
+          <input
+            type="date"
+            value={serviceForm.開催日}
+            onChange={(e) => setServiceForm({ ...serviceForm, 開催日: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">開催回数</label>
+          <select
+            value={serviceForm.開催回数}
+            onChange={(e) => setServiceForm({ ...serviceForm, 開催回数: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {meetingCountOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderFormByType = () => {
+    switch (selectedType) {
+      case "assessment":
+        return renderAssessmentForm();
+      case "management_meeting":
+        return renderManagementMeetingForm();
+      case "service_meeting":
+        return renderServiceMeetingForm();
+    }
   };
 
   return (
@@ -165,6 +501,11 @@ export default function Home() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Dynamic Form Section */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+          {renderFormByType()}
         </div>
 
         {/* File Upload Section */}
