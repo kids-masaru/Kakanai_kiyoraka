@@ -3,31 +3,36 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+// SVG Arrow Icon
+const ArrowLeftIcon = () => (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+    </svg>
+);
+
 export default function Header() {
     const pathname = usePathname();
 
-    const isActive = (path: string) => {
-        if (path === '/' && pathname === '/') return true;
-        if (path !== '/' && pathname.startsWith(path)) return true;
-        return false;
+    // Get page title based on path
+    const getTitle = () => {
+        if (pathname.includes('genogram')) return 'ジェノグラム編集';
+        if (pathname.includes('body-map')) return '身体図編集';
+        if (pathname.includes('house-plan')) return '家屋図編集';
+        return 'エディター';
     };
 
     return (
-        <div className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 px-4 flex items-center shadow-sm z-50">
-            <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-gray-700">CareDX Editor</span>
-            </div>
-            <div className="mx-6 h-6 w-px bg-gray-300"></div>
-            <div className="flex bg-gray-100 p-1 rounded-lg">
-                <Link href="/" className={`px-4 py-1.5 text-sm font-medium transition-all rounded-md ${isActive('/') ? 'bg-white text-blue-600 shadow-sm font-bold' : 'text-gray-500 hover:text-gray-700'}`}>
-                    👨‍👩‍👧‍👦 ジェノグラム
+        <div className="fixed top-0 left-0 right-0 h-12 bg-white border-b border-gray-200 px-4 flex items-center justify-between shadow-sm z-50">
+            <div className="flex items-center gap-3">
+                <Link
+                    href="/"
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                    <ArrowLeftIcon />
+                    <span>カカナイに戻る</span>
                 </Link>
-                <Link href="/house-plan" className={`px-4 py-1.5 text-sm font-medium transition-all rounded-md ${isActive('/house-plan') ? 'bg-white text-blue-600 shadow-sm font-bold' : 'text-gray-500 hover:text-gray-700'}`}>
-                    🏠 家屋図
-                </Link>
-                <Link href="/body-map" className={`px-4 py-1.5 text-sm font-medium transition-all rounded-md ${isActive('/body-map') ? 'bg-white text-blue-600 shadow-sm font-bold' : 'text-gray-500 hover:text-gray-700'}`}>
-                    👤 身体図
-                </Link>
+                <div className="h-5 w-px bg-gray-300"></div>
+                <span className="text-sm font-semibold text-gray-800">{getTitle()}</span>
             </div>
         </div>
     );
