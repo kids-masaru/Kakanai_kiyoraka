@@ -140,6 +140,38 @@ export default function Home() {
     }
   }, []);
 
+  // Drag and Drop handlers
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const droppedFile = e.dataTransfer.files?.[0];
+    if (droppedFile && droppedFile.type.startsWith('audio/')) {
+      setFile(droppedFile);
+      setUploadState({ status: "idle", progress: 0, message: "" });
+    }
+  }, []);
+
   const getFormData = () => {
     switch (selectedType) {
       case "assessment": return assessmentForm;
@@ -363,8 +395,8 @@ export default function Home() {
                   key={type.value}
                   onClick={() => setSelectedType(type.value)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedType === type.value
-                      ? "bg-blue-500 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    ? "bg-blue-500 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                 >
                   {type.label}
@@ -383,11 +415,17 @@ export default function Home() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-800 mb-3">音声ファイル</h3>
 
-            <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center hover:border-blue-300 transition-colors mb-3">
+            <div
+              className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors mb-3 ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               <input type="file" accept="audio/*,.m4a,.mp3,.wav" onChange={handleFileChange} className="hidden" id="file-input" />
               <label htmlFor="file-input" className="cursor-pointer flex flex-col items-center">
                 <UploadIcon />
-                <p className="text-sm text-gray-500 mt-2">クリックしてファイルを選択</p>
+                <p className="text-sm text-gray-500 mt-2">{isDragging ? 'ここにドロップ' : 'クリックまたはドラッグ&ドロップ'}</p>
                 <p className="text-xs text-gray-400">M4A, MP3, WAV</p>
               </label>
             </div>
