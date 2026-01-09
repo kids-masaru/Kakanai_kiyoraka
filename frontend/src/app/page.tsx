@@ -12,7 +12,6 @@ interface UploadState {
   result?: Record<string, unknown>;
 }
 
-// Assessment form data
 interface AssessmentFormData {
   受付対応者: string;
   アセスメント理由: string;
@@ -23,7 +22,6 @@ interface AssessmentFormData {
   受付方法: string;
 }
 
-// Management meeting form data
 interface ManagementMeetingFormData {
   開催日: string;
   開催場所: string;
@@ -32,7 +30,6 @@ interface ManagementMeetingFormData {
   終了時間: string;
 }
 
-// Service meeting form data
 interface ServiceMeetingFormData {
   担当者名: string;
   利用者名: string;
@@ -43,28 +40,18 @@ interface ServiceMeetingFormData {
   開催回数: string;
 }
 
-const documentTypes: { value: DocumentType; label: string; description: string; emoji: string }[] = [
-  {
-    value: "assessment",
-    label: "アセスメントシート作成",
-    description: "面談録音からアセスメント情報を抽出",
-    emoji: "📝"
-  },
-  {
-    value: "service_meeting",
-    label: "サービス担当者会議録",
-    description: "担当者会議の録音から会議録を作成",
-    emoji: "👥"
-  },
-  {
-    value: "management_meeting",
-    label: "運営会議録",
-    description: "運営会議の録音から会議録を作成",
-    emoji: "📅"
-  }
+interface Settings {
+  spreadsheetId: string;
+  sheetName: string;
+  geminiModel: string;
+}
+
+const documentTypes: { value: DocumentType; label: string }[] = [
+  { value: "assessment", label: "アセスメントシート" },
+  { value: "service_meeting", label: "サービス担当者会議録" },
+  { value: "management_meeting", label: "運営会議録" }
 ];
 
-// Dropdown options
 const assessmentReasonOptions = ["初回", "更新", "区分変更（改善）", "区分変更（悪化）", "退院", "対処", "サービス追加", "サービス変更"];
 const relationshipOptions = ["本人", "家族", "配偶者", "子", "兄弟姉妹", "親", "その他"];
 const locationOptions = ["自宅", "病院", "施設", "その他"];
@@ -73,17 +60,50 @@ const meetingCountOptions = ["第1回", "第2回", "第3回", "第4回", "第5�
 const timeOptions = Array.from({ length: 25 }, (_, i) => `${String(i).padStart(2, '0')}:00`).concat(
   Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:30`)
 ).sort();
+const geminiModels = ["gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro"];
+
+// SVG Icons
+const SettingsIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
+const UploadIcon = () => (
+  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+  </svg>
+);
 
 export default function Home() {
   const [selectedType, setSelectedType] = useState<DocumentType>("assessment");
   const [file, setFile] = useState<File | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const [uploadState, setUploadState] = useState<UploadState>({
     status: "idle",
     progress: 0,
     message: "",
   });
 
-  // Form states
+  const [settings, setSettings] = useState<Settings>({
+    spreadsheetId: "",
+    sheetName: "",
+    geminiModel: "gemini-2.5-pro",
+  });
+
   const [assessmentForm, setAssessmentForm] = useState<AssessmentFormData>({
     受付対応者: "",
     アセスメント理由: "初回",
@@ -122,72 +142,29 @@ export default function Home() {
 
   const getFormData = () => {
     switch (selectedType) {
-      case "assessment":
-        return assessmentForm;
-      case "management_meeting":
-        return managementForm;
-      case "service_meeting":
-        return serviceForm;
+      case "assessment": return assessmentForm;
+      case "management_meeting": return managementForm;
+      case "service_meeting": return serviceForm;
     }
   };
 
   const handleUpload = async () => {
     if (!file) return;
-
     try {
-      setUploadState({
-        status: "uploading",
-        progress: 10,
-        message: "署名付きURLを取得中...",
-      });
-
-      const { upload_url, file_key } = await getPresignedUrl(
-        file.name,
-        file.type || "audio/mp4"
-      );
-
-      setUploadState({
-        status: "uploading",
-        progress: 30,
-        message: "R2にアップロード中...",
-      });
-
+      setUploadState({ status: "uploading", progress: 10, message: "署名付きURLを取得中..." });
+      const { upload_url, file_key } = await getPresignedUrl(file.name, file.type || "audio/mp4");
+      setUploadState({ status: "uploading", progress: 30, message: "R2にアップロード中..." });
       await uploadToR2(upload_url, file);
-
-      setUploadState({
-        status: "analyzing",
-        progress: 60,
-        message: "AI分析中...",
-      });
-
+      setUploadState({ status: "analyzing", progress: 60, message: "AI分析中..." });
       const analysisType = selectedType === "assessment" ? "assessment" : "meeting";
-      const formData = getFormData();
-
-      // Pass form data to backend for enhanced analysis
       const result = await analyzeAudio(file_key, analysisType);
-
       if (result.success) {
-        // Merge form data with AI result
-        const mergedData = {
-          ...result.data,
-          formInput: formData,
-        };
-
-        setUploadState({
-          status: "complete",
-          progress: 100,
-          message: "分析完了！",
-          result: mergedData,
-        });
+        setUploadState({ status: "complete", progress: 100, message: "分析完了！", result: { ...result.data, formInput: getFormData() } });
       } else {
         throw new Error(result.error || "分析に失敗しました");
       }
     } catch (error) {
-      setUploadState({
-        status: "error",
-        progress: 0,
-        message: error instanceof Error ? error.message : "エラーが発生しました",
-      });
+      setUploadState({ status: "error", progress: 0, message: error instanceof Error ? error.message : "エラーが発生しました" });
     }
   };
 
@@ -196,467 +173,265 @@ export default function Home() {
     setUploadState({ status: "idle", progress: 0, message: "" });
   };
 
-  // Form renderers
-  const renderAssessmentForm = () => (
-    <div className="space-y-4">
-      <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-        📋 基本情報の入力
-        <span className="text-xs text-gray-500 font-normal">※以下の項目は手入力でスプレッドシートに直接反映されます</span>
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">受付対応者</label>
-          <input
-            type="text"
-            value={assessmentForm.受付対応者}
-            onChange={(e) => setAssessmentForm({ ...assessmentForm, 受付対応者: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="例: 山田太郎"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">アセスメント理由</label>
-          <select
-            value={assessmentForm.アセスメント理由}
-            onChange={(e) => setAssessmentForm({ ...assessmentForm, アセスメント理由: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            {assessmentReasonOptions.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">相談者氏名</label>
-          <input
-            type="text"
-            value={assessmentForm.相談者氏名}
-            onChange={(e) => setAssessmentForm({ ...assessmentForm, 相談者氏名: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="例: 鈴木花子"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">アセスメント理由_備考</label>
-          <input
-            type="text"
-            value={assessmentForm.アセスメント理由_備考}
-            onChange={(e) => setAssessmentForm({ ...assessmentForm, アセスメント理由_備考: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="備考があれば入力"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">続柄</label>
-          <select
-            value={assessmentForm.続柄}
-            onChange={(e) => setAssessmentForm({ ...assessmentForm, 続柄: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            {relationshipOptions.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">実施場所</label>
-          <select
-            value={assessmentForm.実施場所}
-            onChange={(e) => setAssessmentForm({ ...assessmentForm, 実施場所: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            {locationOptions.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">受付方法</label>
-          <select
-            value={assessmentForm.受付方法}
-            onChange={(e) => setAssessmentForm({ ...assessmentForm, 受付方法: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            {receptionMethodOptions.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderManagementMeetingForm = () => (
-    <div className="space-y-4">
-      <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-        📋 記録情報の入力（運営会議録）
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">開催日</label>
-          <input
-            type="date"
-            value={managementForm.開催日}
-            onChange={(e) => setManagementForm({ ...managementForm, 開催日: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">開催場所</label>
-          <input
-            type="text"
-            value={managementForm.開催場所}
-            onChange={(e) => setManagementForm({ ...managementForm, 開催場所: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="例: 会議室"
-          />
-        </div>
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">参加者</label>
-          <input
-            type="text"
-            value={managementForm.参加者}
-            onChange={(e) => setManagementForm({ ...managementForm, 参加者: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="例: 井﨑、武島、〇〇"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">開催時間</label>
-          <div className="flex items-center gap-2">
-            <select
-              value={managementForm.開始時間}
-              onChange={(e) => setManagementForm({ ...managementForm, 開始時間: e.target.value })}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {timeOptions.map(option => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-            <span className="text-gray-500">〜</span>
-            <select
-              value={managementForm.終了時間}
-              onChange={(e) => setManagementForm({ ...managementForm, 終了時間: e.target.value })}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {timeOptions.map(option => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderServiceMeetingForm = () => (
-    <div className="space-y-4">
-      <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-        📋 記録情報の入力（サービス担当者会議事録）
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">担当者名</label>
-          <input
-            type="text"
-            value={serviceForm.担当者名}
-            onChange={(e) => setServiceForm({ ...serviceForm, 担当者名: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="例: 山田太郎"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">開催場所</label>
-          <select
-            value={serviceForm.開催場所}
-            onChange={(e) => setServiceForm({ ...serviceForm, 開催場所: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            {locationOptions.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">利用者名</label>
-          <input
-            type="text"
-            value={serviceForm.利用者名}
-            onChange={(e) => setServiceForm({ ...serviceForm, 利用者名: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="例: 鈴木花子"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">開催時間</label>
-          <div className="flex items-center gap-2">
-            <select
-              value={serviceForm.開始時間}
-              onChange={(e) => setServiceForm({ ...serviceForm, 開始時間: e.target.value })}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {timeOptions.map(option => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-            <span className="text-gray-500">〜</span>
-            <select
-              value={serviceForm.終了時間}
-              onChange={(e) => setServiceForm({ ...serviceForm, 終了時間: e.target.value })}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {timeOptions.map(option => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">開催日</label>
-          <input
-            type="date"
-            value={serviceForm.開催日}
-            onChange={(e) => setServiceForm({ ...serviceForm, 開催日: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">開催回数</label>
-          <select
-            value={serviceForm.開催回数}
-            onChange={(e) => setServiceForm({ ...serviceForm, 開催回数: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            {meetingCountOptions.map(option => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-    </div>
-  );
-
   const renderFormByType = () => {
     switch (selectedType) {
       case "assessment":
-        return renderAssessmentForm();
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">受付対応者</label>
+              <input type="text" value={assessmentForm.受付対応者} onChange={(e) => setAssessmentForm({ ...assessmentForm, 受付対応者: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="山田太郎" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">アセスメント理由</label>
+              <select value={assessmentForm.アセスメント理由} onChange={(e) => setAssessmentForm({ ...assessmentForm, アセスメント理由: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                {assessmentReasonOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">相談者氏名</label>
+              <input type="text" value={assessmentForm.相談者氏名} onChange={(e) => setAssessmentForm({ ...assessmentForm, 相談者氏名: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="鈴木花子" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">続柄</label>
+              <select value={assessmentForm.続柄} onChange={(e) => setAssessmentForm({ ...assessmentForm, 続柄: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                {relationshipOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">実施場所</label>
+              <select value={assessmentForm.実施場所} onChange={(e) => setAssessmentForm({ ...assessmentForm, 実施場所: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                {locationOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">受付方法</label>
+              <select value={assessmentForm.受付方法} onChange={(e) => setAssessmentForm({ ...assessmentForm, 受付方法: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                {receptionMethodOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">備考</label>
+              <input type="text" value={assessmentForm.アセスメント理由_備考} onChange={(e) => setAssessmentForm({ ...assessmentForm, アセスメント理由_備考: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="備考があれば入力" />
+            </div>
+          </div>
+        );
       case "management_meeting":
-        return renderManagementMeetingForm();
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">開催日</label>
+              <input type="date" value={managementForm.開催日} onChange={(e) => setManagementForm({ ...managementForm, 開催日: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">開催場所</label>
+              <input type="text" value={managementForm.開催場所} onChange={(e) => setManagementForm({ ...managementForm, 開催場所: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="会議室" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">開始</label>
+              <select value={managementForm.開始時間} onChange={(e) => setManagementForm({ ...managementForm, 開始時間: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                {timeOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">終了</label>
+              <select value={managementForm.終了時間} onChange={(e) => setManagementForm({ ...managementForm, 終了時間: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                {timeOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2 md:col-span-4">
+              <label className="block text-xs font-medium text-gray-600 mb-1">参加者</label>
+              <input type="text" value={managementForm.参加者} onChange={(e) => setManagementForm({ ...managementForm, 参加者: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="例: 井﨑、武島、〇〇" />
+            </div>
+          </div>
+        );
       case "service_meeting":
-        return renderServiceMeetingForm();
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">担当者名</label>
+              <input type="text" value={serviceForm.担当者名} onChange={(e) => setServiceForm({ ...serviceForm, 担当者名: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="山田太郎" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">利用者名</label>
+              <input type="text" value={serviceForm.利用者名} onChange={(e) => setServiceForm({ ...serviceForm, 利用者名: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="鈴木花子" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">開催日</label>
+              <input type="date" value={serviceForm.開催日} onChange={(e) => setServiceForm({ ...serviceForm, 開催日: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">開催場所</label>
+              <select value={serviceForm.開催場所} onChange={(e) => setServiceForm({ ...serviceForm, 開催場所: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                {locationOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">開始</label>
+              <select value={serviceForm.開始時間} onChange={(e) => setServiceForm({ ...serviceForm, 開始時間: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                {timeOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">終了</label>
+              <select value={serviceForm.終了時間} onChange={(e) => setServiceForm({ ...serviceForm, 終了時間: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                {timeOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">開催回数</label>
+              <select value={serviceForm.開催回数} onChange={(e) => setServiceForm({ ...serviceForm, 開催回数: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                {meetingCountOptions.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+          </div>
+        );
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <img
-              src="/icon.jpg"
-              alt="カカナイ"
-              className="w-12 h-12 rounded-xl shadow-sm"
-            />
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">介護DX カカナイ</h1>
-              <p className="text-xs text-gray-500">帳票自動転記・AI分析</p>
-            </div>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Settings Sidebar */}
+      <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-xl transform transition-transform duration-300 ${showSettings ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="font-semibold text-gray-900">設定</h2>
+          <button onClick={() => setShowSettings(false)} className="p-1 hover:bg-gray-100 rounded">
+            <CloseIcon />
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Geminiモデル</label>
+            <select value={settings.geminiModel} onChange={(e) => setSettings({ ...settings, geminiModel: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+              {geminiModels.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">スプレッドシートID</label>
+            <input type="text" value={settings.spreadsheetId} onChange={(e) => setSettings({ ...settings, spreadsheetId: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="1abc123..." />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">シート名（任意）</label>
+            <input type="text" value={settings.sheetName} onChange={(e) => setSettings({ ...settings, sheetName: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="シート1" />
+          </div>
+          <div className="pt-4 border-t border-gray-200">
+            <a href="https://genogram-editor.vercel.app" target="_blank" rel="noopener noreferrer" className="block w-full text-center py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg">
+              ジェノグラム編集
+            </a>
+            <a href="https://genogram-editor.vercel.app/body-map" target="_blank" rel="noopener noreferrer" className="block w-full text-center py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg">
+              身体図編集
+            </a>
+            <a href="https://genogram-editor.vercel.app/house-plan" target="_blank" rel="noopener noreferrer" className="block w-full text-center py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg">
+              家屋図編集
+            </a>
           </div>
         </div>
-      </header>
+      </div>
+
+      {/* Overlay */}
+      {showSettings && <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setShowSettings(false)} />}
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-8">
+      <div className="flex-1">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src="/icon.jpg" alt="カカナイ" className="w-9 h-9 rounded-lg" />
+              <div>
+                <h1 className="text-lg font-bold text-gray-900">介護DX カカナイ</h1>
+              </div>
+            </div>
+            <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600" title="設定">
+              <SettingsIcon />
+            </button>
+          </div>
+        </header>
 
-        {/* Document Type Selection */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            📋 作成する書類を選択
-          </h2>
-          <div className="grid gap-3">
-            {documentTypes.map((type) => (
-              <button
-                key={type.value}
-                onClick={() => setSelectedType(type.value)}
-                className={`p-4 rounded-xl border-2 text-left transition-all ${selectedType === type.value
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{type.emoji}</span>
-                  <div>
-                    <div className="font-medium text-gray-900">{type.label}</div>
-                    <div className="text-sm text-gray-500">{type.description}</div>
-                  </div>
-                  {selectedType === type.value && (
-                    <div className="ml-auto">
-                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
-                        <span className="text-white text-sm">✓</span>
-                      </div>
-                    </div>
-                  )}
+        {/* Main */}
+        <main className="max-w-5xl mx-auto px-4 py-4">
+          {/* Document Type Selection - Compact */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 mb-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-gray-700 mr-2">作成:</span>
+              {documentTypes.map((type) => (
+                <button
+                  key={type.value}
+                  onClick={() => setSelectedType(type.value)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedType === type.value
+                      ? "bg-blue-500 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                >
+                  {selectedType === type.value && <CheckIcon />}
+                  {type.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Form Section */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">基本情報</h3>
+            {renderFormByType()}
+          </div>
+
+          {/* Upload Section */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">音声ファイル</h3>
+
+            <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center hover:border-blue-300 transition-colors mb-3">
+              <input type="file" accept="audio/*,.m4a,.mp3,.wav" onChange={handleFileChange} className="hidden" id="file-input" />
+              <label htmlFor="file-input" className="cursor-pointer flex flex-col items-center">
+                <UploadIcon />
+                <p className="text-sm text-gray-500 mt-2">クリックしてファイルを選択</p>
+                <p className="text-xs text-gray-400">M4A, MP3, WAV</p>
+              </label>
+            </div>
+
+            {file && (
+              <div className="p-2 bg-blue-50 rounded-lg flex items-center gap-2 mb-3 text-sm">
+                <span className="text-blue-600">●</span>
+                <span className="flex-1 truncate">{file.name}</span>
+                <span className="text-gray-500">{(file.size / 1024 / 1024).toFixed(1)}MB</span>
+                <button onClick={resetUpload} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+              </div>
+            )}
+
+            <button
+              onClick={handleUpload}
+              disabled={!file || uploadState.status === "uploading" || uploadState.status === "analyzing"}
+              className="w-full py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {uploadState.status === "uploading" || uploadState.status === "analyzing"
+                ? uploadState.message
+                : `${documentTypes.find(t => t.value === selectedType)?.label}を作成`}
+            </button>
+
+            {(uploadState.status === "uploading" || uploadState.status === "analyzing") && (
+              <div className="mt-3">
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-300" style={{ width: `${uploadState.progress}%` }} />
                 </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Dynamic Form Section */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          {renderFormByType()}
-        </div>
-
-        {/* File Upload Section */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            🎤 音声ファイルをアップロード
-          </h2>
-
-          {/* File Upload Area */}
-          <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors mb-4">
-            <input
-              type="file"
-              accept="audio/*,.m4a,.mp3,.wav"
-              onChange={handleFileChange}
-              className="hidden"
-              id="file-input"
-            />
-            <label htmlFor="file-input" className="cursor-pointer">
-              <div className="text-4xl mb-3">📁</div>
-              <p className="text-gray-600 mb-2">
-                クリックしてファイルを選択
-              </p>
-              <p className="text-gray-400 text-sm">
-                対応形式: M4A, MP3, WAV
-              </p>
-            </label>
-          </div>
-
-          {/* Selected File Info */}
-          {file && (
-            <div className="p-3 bg-blue-50 rounded-lg flex items-center gap-3 mb-4">
-              <span className="text-2xl">🎵</span>
-              <div className="flex-1">
-                <p className="font-medium text-gray-900">{file.name}</p>
-                <p className="text-sm text-gray-500">
-                  {(file.size / 1024 / 1024).toFixed(2)} MB
-                </p>
               </div>
-              <button
-                onClick={resetUpload}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-          )}
+            )}
 
-          {/* Upload Button */}
-          <button
-            onClick={handleUpload}
-            disabled={!file || uploadState.status === "uploading" || uploadState.status === "analyzing"}
-            className="w-full py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-lg"
-          >
-            {uploadState.status === "uploading" || uploadState.status === "analyzing"
-              ? uploadState.message
-              : `📤 ${documentTypes.find(t => t.value === selectedType)?.label}を作成`}
-          </button>
+            {uploadState.status === "error" && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{uploadState.message}</div>
+            )}
 
-          {/* Progress Bar */}
-          {(uploadState.status === "uploading" || uploadState.status === "analyzing") && (
-            <div className="mt-4">
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${uploadState.progress}%` }}
-                />
+            {uploadState.status === "complete" && uploadState.result && (
+              <div className="mt-4">
+                <h4 className="text-sm font-medium text-gray-800 mb-2">分析結果</h4>
+                <div className="bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto">
+                  <pre className="text-xs text-gray-700 whitespace-pre-wrap">{JSON.stringify(uploadState.result, null, 2)}</pre>
+                </div>
+                <button onClick={resetUpload} className="mt-3 w-full py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">別のファイルを分析</button>
               </div>
-              <p className="text-sm text-gray-500 mt-2 text-center">
-                {uploadState.message}
-              </p>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {uploadState.status === "error" && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
-              <p className="text-red-700">❌ {uploadState.message}</p>
-            </div>
-          )}
-
-          {/* Result */}
-          {uploadState.status === "complete" && uploadState.result && (
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                ✅ 分析結果
-              </h3>
-              <div className="bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto">
-                <pre className="text-sm text-gray-700 whitespace-pre-wrap">
-                  {JSON.stringify(uploadState.result, null, 2)}
-                </pre>
-              </div>
-              <button
-                onClick={resetUpload}
-                className="mt-4 w-full py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                🔄 別のファイルを分析
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Related Tools */}
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <div className="flex items-center gap-4 mb-6">
-            <img
-              src="/tools-icon.png"
-              alt="関連ツール"
-              className="w-16 h-16 rounded-xl"
-            />
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                関連ツール
-              </h3>
-              <p className="text-sm text-gray-500">ジェノグラム・身体図・家屋図エディター</p>
-            </div>
+            )}
           </div>
-          <div className="flex flex-wrap gap-3">
-            <a
-              href="https://genogram-editor.vercel.app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
-            >
-              👨‍👩‍👧 ジェノグラム編集
-            </a>
-            <a
-              href="https://genogram-editor.vercel.app/body-map"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium"
-            >
-              🩺 身体図編集
-            </a>
-            <a
-              href="https://genogram-editor.vercel.app/house-plan"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
-            >
-              🏠 家屋図編集
-            </a>
-          </div>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-4xl mx-auto px-4 py-6 text-center text-gray-500 text-sm">
-          © 2026 介護DX カカナイ
-        </div>
-      </footer>
+        </main>
+      </div>
     </div>
   );
 }
