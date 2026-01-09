@@ -7,8 +7,11 @@ export const metadata: Metadata = {
   description: "介護業務DX - 帳票自動転記・AI分析",
   manifest: "/manifest.json",
   icons: {
-    icon: "/icon.jpg",
-    shortcut: "/icon.jpg",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.jpg", type: "image/jpeg" },
+    ],
+    shortcut: "/favicon.ico",
     apple: "/icon.jpg",
   },
   appleWebApp: {
