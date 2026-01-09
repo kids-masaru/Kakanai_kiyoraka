@@ -57,6 +57,29 @@ class StorageService:
             "file_key": file_key
         }
     
+    def upload_file(self, file_data: bytes, filename: str, content_type: str) -> str:
+        """
+        バックエンド経由でR2にファイルをアップロード
+        """
+        if not self.s3_client:
+            raise ValueError("R2 credentials not configured")
+        
+        # ユニークなファイルキーを生成
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        ext = filename.split(".")[-1] if "." in filename else ""
+        file_key = f"uploads/{timestamp}_{unique_id}.{ext}"
+        
+        # R2にアップロード
+        self.s3_client.put_object(
+            Bucket=self.bucket_name,
+            Key=file_key,
+            Body=file_data,
+            ContentType=content_type
+        )
+        
+        return file_key
+    
     def get_file(self, file_key: str) -> bytes:
         """
         R2からファイルを取得

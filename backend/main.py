@@ -108,6 +108,23 @@ async def get_presigned_url(request: PresignedUrlRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/upload/direct")
+async def upload_file_direct(file: UploadFile = File(...)):
+    """
+    バックエンド経由でR2にアップロード（CORSバイパス）
+    """
+    try:
+        content = await file.read()
+        file_key = storage_service.upload_file(
+            file_data=content,
+            filename=file.filename,
+            content_type=file.content_type or "application/octet-stream"
+        )
+        return {"success": True, "file_key": file_key}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/analyze/audio", response_model=AnalyzeResponse)
 async def analyze_audio(request: AnalyzeAudioRequest):
     """

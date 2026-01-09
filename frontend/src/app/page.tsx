@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { getPresignedUrl, uploadToR2, analyzeAudio } from "@/lib/api";
+import { uploadFileDirect, analyzeAudio } from "@/lib/api";
 
 type DocumentType = "assessment" | "service_meeting" | "management_meeting";
 
@@ -191,13 +191,14 @@ export default function Home() {
   const handleUpload = async () => {
     if (!file) return;
     try {
-      setUploadState({ status: "uploading", progress: 10, message: "署名付きURLを取得中..." });
-      const { upload_url, file_key } = await getPresignedUrl(file.name, file.type || "audio/mp4");
-      setUploadState({ status: "uploading", progress: 30, message: "R2にアップロード中..." });
-      await uploadToR2(upload_url, file);
+      setUploadState({ status: "uploading", progress: 20, message: "アップロード中..." });
+      const uploadResult = await uploadFileDirect(file);
+      if (!uploadResult.success) {
+        throw new Error("アップロードに失敗しました");
+      }
       setUploadState({ status: "analyzing", progress: 60, message: "AI分析中..." });
       const analysisType = selectedType === "assessment" ? "assessment" : "meeting";
-      const result = await analyzeAudio(file_key, analysisType);
+      const result = await analyzeAudio(uploadResult.file_key, analysisType);
       if (result.success) {
         setUploadState({ status: "complete", progress: 100, message: "分析完了！", result: { ...result.data, formInput: getFormData(), spreadsheetId: getCurrentSpreadsheetId() } });
       } else {

@@ -61,6 +61,27 @@ export async function uploadToR2(
 }
 
 /**
+ * Upload file through backend proxy (bypasses CORS issues)
+ */
+export async function uploadFileDirect(
+    file: File
+): Promise<{ success: boolean; file_key: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/api/upload/direct`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to upload file: ${response.statusText}`);
+    }
+
+    return response.json();
+}
+
+/**
  * Analyze audio file
  */
 export async function analyzeAudio(
