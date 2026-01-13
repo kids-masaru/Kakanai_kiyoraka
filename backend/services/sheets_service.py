@@ -187,15 +187,21 @@ class SheetsService:
         """
         マッピング定義に基づいてスプレッドシートにデータを書き込み
         """
+        print(f"DEBUG: write_data called with spreadsheet_id={spreadsheet_id}", flush=True)
+        print(f"DEBUG: client initialized: {self.client is not None}", flush=True)
+        
         if not self.client:
             raise ValueError("Google Sheets client not initialized")
         
         # マッピング辞書を選択
         mapping = self.mapping_dict if mapping_type == "assessment" else self.mapping2_dict
+        print(f"DEBUG: mapping_type={mapping_type}, mapping loaded: {mapping is not None}", flush=True)
         if not mapping:
             raise ValueError(f"Mapping not loaded for type: {mapping_type}")
         
+        print(f"DEBUG: Opening spreadsheet...", flush=True)
         spreadsheet = self.client.open_by_key(spreadsheet_id)
+        print(f"DEBUG: Spreadsheet opened successfully", flush=True)
         
         # シート名が指定されていない場合は最初のシートを使用
         if sheet_name:
