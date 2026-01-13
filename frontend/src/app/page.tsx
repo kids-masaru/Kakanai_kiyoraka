@@ -48,12 +48,12 @@ interface Settings {
   geminiModel: string;
 }
 
-// Default spreadsheet IDs from original app
+// Spreadsheet IDs from environment variables (Vercel) with fallbacks
 const DEFAULT_SETTINGS: Settings = {
-  assessmentSheetId: "1H_jUc8jU4youPNUae5KBvPKljGTT4v13MKaRUiKoujI",
-  serviceMeetingSheetId: "1ufwuCz0dCxiqL6PmlpqziD82lvaVI4ucong13NAY7Wg",
-  managementMeetingSheetId: "1SlRGB0NVaTm_AoAyR4hqsA8b1rNz95fbUUELs0o-yI8",
-  geminiModel: "gemini-3-flash-preview",
+  assessmentSheetId: process.env.NEXT_PUBLIC_ASSESSMENT_SHEET_ID || "1H_jUc8jU4youPNUae5KBvPKljGTT4v13MKaRUiKoujI",
+  serviceMeetingSheetId: process.env.NEXT_PUBLIC_SERVICE_MEETING_SHEET_ID || "1ufwuCz0dCxiqL6PmlpqziD82lvaVI4ucong13NAY7Wg",
+  managementMeetingSheetId: process.env.NEXT_PUBLIC_MANAGEMENT_MEETING_SHEET_ID || "1SlRGB0NVaTm_AoAyR4hqsA8b1rNz95fbUUELs0o-yI8",
+  geminiModel: process.env.NEXT_PUBLIC_GEMINI_MODEL || "gemini-3-flash-preview",
 };
 
 const documentTypes: { value: DocumentType; label: string }[] = [
