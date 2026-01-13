@@ -65,10 +65,41 @@ class AIService:
             text = text.split("```")[1].split("```")[0].strip()
         return text
     
+    def _fix_json_string(self, text: str) -> str:
+        """文字列内の改行やエスケープ問題を修正"""
+        import re
+        # 文字列値内の改行を\\nにエスケープ
+        # JSON文字列内（": "の後から次の","や"}"まで）の生の改行を処理
+        def escape_newlines(match):
+            value = match.group(1)
+            # 改行を\\nに置換
+            escaped = value.replace('\n', '\\n').replace('\r', '')
+            return f'": "{escaped}"'
+        
+        # 簡易的なパターンマッチング: ": "値"の形式で改行を含むものを修正
+        # より堅牢なアプローチ：全体をクリーンアップ
+        lines = text.split('\n')
+        result_lines = []
+        in_string = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped:
+                result_lines.append(stripped)
+        
+        cleaned = ' '.join(result_lines)
+        return cleaned
+    
     def _parse_json_result(self, text: str) -> Dict[str, Any]:
         """JSONをパースし、リストの場合は最初の要素を返す"""
         cleaned = self._clean_json_response(text)
-        result = json.loads(cleaned)
+        
+        try:
+            result = json.loads(cleaned)
+        except json.JSONDecodeError:
+            # パースエラー時は改行を処理してリトライ
+            fixed = self._fix_json_string(cleaned)
+            result = json.loads(fixed)
+        
         # Geminiがリストで返すことがあるので、最初の要素を取り出す
         if isinstance(result, list) and len(result) > 0:
             return result[0]
