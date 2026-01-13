@@ -1,22 +1,32 @@
 """
-Sheets Service - Google Sheets統合
+Sheets Service - Google Sheets統合（マッピング対応版）
 """
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 import os
 import json
+import re
+from pathlib import Path
 from typing import Dict, Any, List, Optional
+
+# マッピングファイルのパス
+CONFIG_DIR = Path(__file__).parent.parent / "config"
+MAPPING_FILE = CONFIG_DIR / "mapping.txt"
+MAPPING2_FILE = CONFIG_DIR / "mapping2.txt"
 
 
 class SheetsService:
     def __init__(self):
         self.client = None
+        self.mapping_dict = None
+        self.mapping2_dict = None
         self._initialize_client()
+        self._load_mappings()
     
     def _initialize_client(self):
         """Google Sheets APIクライアントを初期化"""
-        scope = [
-            'https://spreadsheets.google.com/feeds',
+        scopes = [
+            'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
         
@@ -26,13 +36,98 @@ class SheetsService:
         if service_account_json:
             try:
                 service_account_info = json.loads(service_account_json)
-                credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-                    service_account_info, scope
+                credentials = Credentials.from_service_account_info(
+                    service_account_info, scopes=scopes
                 )
                 self.client = gspread.authorize(credentials)
             except Exception as e:
                 print(f"Failed to initialize Google Sheets client: {e}")
                 self.client = None
+    
+    def _load_mappings(self):
+        """マッピングファイルを読み込み"""
+        if MAPPING_FILE.exists():
+            try:
+                mapping_text = MAPPING_FILE.read_text(encoding='utf-8')
+                self.mapping_dict = self._parse_mapping(mapping_text)
+            except Exception as e:
+                print(f"Failed to load mapping.txt: {e}")
+        
+        if MAPPING2_FILE.exists():
+            try:
+                mapping_text = MAPPING2_FILE.read_text(encoding='utf-8')
+                self.mapping2_dict = self._parse_mapping(mapping_text)
+            except Exception as e:
+                print(f"Failed to load mapping2.txt: {e}")
+    
+    def _parse_mapping(self, mapping_text: str) -> Dict[str, Dict[str, Any]]:
+        """
+        マッピング定義テキストを解析し、辞書形式に変換する
+        """
+        mapping_dict = {}
+        lines = mapping_text.strip().split('\n')
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # 空行やセパレータはスキップ
+            if not line or line.startswith('-'):
+                i += 1
+                continue
+            
+            # 項目名：セル番地 の形式を解析
+            if '：' in line:
+                parts = line.split('：')
+                if len(parts) == 2:
+                    item_name = parts[0].strip()
+                    cell_and_options = parts[1].strip()
+                    
+                    # セル番地と選択肢を分離
+                    cell_match = re.match(r'^([A-Z]+\d+)', cell_and_options)
+                    if cell_match:
+                        cell = cell_match.group(1)
+                        options = []
+                        
+                        # 選択肢の解析（同じ行にある場合）
+                        options_match = re.search(r'（(.+?)）', cell_and_options)
+                        if options_match:
+                            options_str = options_match.group(1)
+                            options = [opt.strip() for opt in options_str.split('、')]
+                        
+                        # 次の行に選択肢がある場合もチェック
+                        if i + 1 < len(lines):
+                            next_line = lines[i + 1].strip()
+                            if next_line.startswith('（') and next_line.endswith('）'):
+                                options_str = next_line[1:-1]
+                                options = [opt.strip() for opt in options_str.split('、')]
+                                i += 1
+                        
+                        mapping_dict[item_name] = {
+                            "cell": cell,
+                            "options": options
+                        }
+            
+            i += 1
+        
+        return mapping_dict
+    
+    def _flatten_data(self, data: Dict[str, Any], prefix: str = "") -> Dict[str, str]:
+        """
+        ネストされた辞書をフラットに変換
+        例: {"基本情報": {"氏名": "田中"}} -> {"氏名": "田中"}
+        """
+        flat = {}
+        for key, value in data.items():
+            if isinstance(value, dict):
+                # ネストされた辞書は再帰的に処理
+                nested = self._flatten_data(value, f"{prefix}{key}_")
+                flat.update(nested)
+            else:
+                # 値をフラットに追加（キーの最後の部分を使用）
+                flat_key = key
+                flat[flat_key] = str(value) if value else ""
+        return flat
     
     def write_data(
         self,
@@ -42,49 +137,62 @@ class SheetsService:
         mapping_type: str = "assessment"
     ) -> int:
         """
-        スプレッドシートにデータを書き込み
-        
-        Args:
-            spreadsheet_id: スプレッドシートID
-            sheet_name: シート名
-            data: 書き込むデータ（キー: 値の辞書）
-            mapping_type: マッピングタイプ（assessment, meeting等）
-        
-        Returns:
-            書き込んだセル数
+        マッピング定義に基づいてスプレッドシートにデータを書き込み
         """
         if not self.client:
             raise ValueError("Google Sheets client not initialized")
         
+        # マッピング辞書を選択
+        mapping = self.mapping_dict if mapping_type == "assessment" else self.mapping2_dict
+        if not mapping:
+            raise ValueError(f"Mapping not loaded for type: {mapping_type}")
+        
         spreadsheet = self.client.open_by_key(spreadsheet_id)
-        worksheet = spreadsheet.worksheet(sheet_name)
         
-        # マッピングファイルを読み込み（将来の拡張用）
-        # 現在はシンプルに行追加で実装
+        # シート名が指定されていない場合は最初のシートを使用
+        if sheet_name:
+            worksheet = spreadsheet.worksheet(sheet_name)
+        else:
+            worksheet = spreadsheet.sheet1
         
-        written_count = 0
+        # データをフラット化
+        flat_data = self._flatten_data(data)
+        
+        # バッチ更新用のリスト
         cells_to_update = []
+        written_count = 0
         
-        # データを行として追加
-        # TODO: マッピング定義に基づいてセル位置を決定
-        for key, value in data.items():
+        # マッピングに基づいてセルを更新
+        for item_name, mapping_info in mapping.items():
+            cell = mapping_info.get("cell")
+            if not cell:
+                continue
+            
+            # データから値を取得（完全一致または部分一致）
+            value = None
+            if item_name in flat_data:
+                value = flat_data[item_name]
+            else:
+                # 部分一致を試みる
+                for data_key, data_value in flat_data.items():
+                    if item_name in data_key or data_key in item_name:
+                        value = data_value
+                        break
+            
             if value and value != "（空白）":
-                # シンプルな実装: A列にキー、B列に値
                 cells_to_update.append({
-                    "key": key,
-                    "value": str(value)
+                    "cell": cell,
+                    "value": value
                 })
                 written_count += 1
         
-        # バッチ更新（効率化）
+        # バッチ更新
         if cells_to_update:
-            # 最終行を取得
-            all_values = worksheet.get_all_values()
-            next_row = len(all_values) + 1
-            
-            for i, cell_data in enumerate(cells_to_update):
-                worksheet.update_cell(next_row + i, 1, cell_data["key"])
-                worksheet.update_cell(next_row + i, 2, cell_data["value"])
+            for cell_data in cells_to_update:
+                try:
+                    worksheet.update(cell_data["cell"], cell_data["value"])
+                except Exception as e:
+                    print(f"Failed to update cell {cell_data['cell']}: {e}")
         
         return written_count
     
@@ -101,29 +209,23 @@ class SheetsService:
             raise ValueError("Google Sheets client not initialized")
         
         spreadsheet = self.client.open_by_key(spreadsheet_id)
-        worksheet = spreadsheet.worksheet(sheet_name)
+        
+        if sheet_name:
+            worksheet = spreadsheet.worksheet(sheet_name)
+        else:
+            worksheet = spreadsheet.sheet1
         
         if range_str:
             return worksheet.get(range_str)
         else:
             return worksheet.get_all_values()
     
-    def create_spreadsheet(self, title: str, template_id: Optional[str] = None) -> str:
+    def get_sheet_names(self, spreadsheet_id: str) -> List[str]:
         """
-        新しいスプレッドシートを作成
-        
-        Returns:
-            新しいスプレッドシートのID
+        スプレッドシートのシート名一覧を取得
         """
         if not self.client:
             raise ValueError("Google Sheets client not initialized")
         
-        if template_id:
-            # テンプレートからコピー
-            template = self.client.open_by_key(template_id)
-            new_spreadsheet = self.client.copy(template_id, title)
-            return new_spreadsheet.id
-        else:
-            # 新規作成
-            spreadsheet = self.client.create(title)
-            return spreadsheet.id
+        spreadsheet = self.client.open_by_key(spreadsheet_id)
+        return [ws.title for ws in spreadsheet.worksheets()]

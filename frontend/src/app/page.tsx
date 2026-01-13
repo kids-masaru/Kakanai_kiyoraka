@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { uploadFileDirect, analyzeAudio } from "@/lib/api";
+import { uploadFileDirect, analyzeAudio, writeToSheets } from "@/lib/api";
 
 type DocumentType = "assessment" | "service_meeting" | "management_meeting";
 
@@ -465,9 +465,38 @@ export default function Home() {
             {uploadState.status === "complete" && uploadState.result && (
               <div className="mt-4">
                 <h4 className="text-sm font-medium text-gray-800 mb-2">分析結果</h4>
-                <div className="bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto">
+                <div className="bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto mb-3">
                   <pre className="text-xs text-gray-700 whitespace-pre-wrap">{JSON.stringify(uploadState.result, null, 2)}</pre>
                 </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      setUploadState(prev => ({ ...prev, message: "スプレッドシートに書き込み中..." }));
+                      const mappingType = selectedType === "assessment" ? "assessment" : "meeting";
+                      const result = await writeToSheets(
+                        getCurrentSpreadsheetId(),
+                        "",  // 空の場合は最初のシート
+                        uploadState.result || {},
+                        mappingType
+                      );
+                      if (result.success) {
+                        setUploadState(prev => ({ ...prev, status: "complete", message: `✅ スプレッドシートに書き込み完了（${result.data?.written_cells || 0}セル）` }));
+                      } else {
+                        throw new Error(result.error || "書き込みに失敗しました");
+                      }
+                    } catch (error) {
+                      setUploadState(prev => ({ ...prev, message: `❌ 書き込みエラー: ${error instanceof Error ? error.message : '不明なエラー'}` }));
+                    }
+                  }}
+                  className="w-full py-3 bg-green-500 text-white font-medium rounded-lg hover:bg-green-600 transition-all mb-2"
+                >
+                  📊 スプレッドシートに書き込み
+                </button>
+                {uploadState.message && uploadState.message.includes("書き込み") && (
+                  <div className={`p-2 rounded-lg text-sm ${uploadState.message.includes("✅") ? "bg-green-50 text-green-700" : uploadState.message.includes("❌") ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}>
+                    {uploadState.message}
+                  </div>
+                )}
                 <button onClick={resetUpload} className="mt-3 w-full py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">別のファイルを分析</button>
               </div>
             )}
