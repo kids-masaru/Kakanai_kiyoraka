@@ -24,20 +24,34 @@ class SheetsService:
         self._load_mappings()
     
     def _initialize_client(self):
-        """Google Sheets APIクライアントを初期化"""
+        """Google Sheets APIクライアントを初期化（元のcare-dx-appと同じ方式）"""
         scope = [
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
         
-        # 環境変数からサービスアカウント情報を取得
+        # 1. ファイルから認証（元のcare-dx-appと同じ方式）
+        service_account_file = CONFIG_DIR / "service_account.json"
+        
+        if service_account_file.exists():
+            try:
+                credentials = ServiceAccountCredentials.from_json_keyfile_name(
+                    str(service_account_file), scope
+                )
+                self.client = gspread.authorize(credentials)
+                print(f"Google Sheets client initialized from file: {service_account_file}")
+                return
+            except Exception as e:
+                print(f"Failed to initialize from file: {e}")
+        
+        # 2. 環境変数からの認証（フォールバック）
         service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
         
         if service_account_json:
             try:
                 service_account_info = json.loads(service_account_json)
                 
-                # private_keyの\\nを実際の改行に変換（環境変数での\nエスケープ問題対策）
+                # private_keyの\\nを実際の改行に変換
                 if "private_key" in service_account_info:
                     service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
                 
@@ -45,9 +59,13 @@ class SheetsService:
                     service_account_info, scope
                 )
                 self.client = gspread.authorize(credentials)
+                print("Google Sheets client initialized from environment variable")
             except Exception as e:
-                print(f"Failed to initialize Google Sheets client: {e}")
+                print(f"Failed to initialize from env var: {e}")
                 self.client = None
+        else:
+            print("No service account configuration found")
+            self.client = None
     
     def _load_mappings(self):
         """マッピングファイルを読み込み"""
