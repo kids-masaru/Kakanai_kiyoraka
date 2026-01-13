@@ -200,8 +200,8 @@ class SheetsService:
         
         # データをフラット化
         flat_data = self._flatten_data(data)
-        print(f"DEBUG: Flattened data keys: {list(flat_data.keys())}")
-        print(f"DEBUG: Mapping keys (first 10): {list(mapping.keys())[:10]}")
+        print(f"DEBUG: Flattened data keys: {list(flat_data.keys())}", flush=True)
+        print(f"DEBUG: Mapping keys (first 10): {list(mapping.keys())[:10]}", flush=True)
         
         # バッチ更新用のリスト
         cells_to_update = []
@@ -232,17 +232,17 @@ class SheetsService:
                 written_count += 1
         
         # バッチ更新
-        print(f"DEBUG: Cells to update: {len(cells_to_update)}")
+        print(f"DEBUG: Cells to update: {len(cells_to_update)}", flush=True)
         if cells_to_update:
-            print(f"DEBUG: First 5 cells: {cells_to_update[:5]}")
+            print(f"DEBUG: First 5 cells: {cells_to_update[:5]}", flush=True)
             for cell_data in cells_to_update:
                 try:
                     worksheet.update(cell_data["cell"], cell_data["value"])
-                    print(f"DEBUG: Updated cell {cell_data['cell']}")
+                    print(f"DEBUG: Updated cell {cell_data['cell']}", flush=True)
                 except Exception as e:
-                    print(f"Failed to update cell {cell_data['cell']}: {e}")
+                    print(f"Failed to update cell {cell_data['cell']}: {e}", flush=True)
         else:
-            print("DEBUG: No cells to update - mapping did not match any data fields")
+            print("DEBUG: No cells to update - mapping did not match any data fields", flush=True)
         
         return written_count
     
