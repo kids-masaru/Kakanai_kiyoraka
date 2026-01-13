@@ -75,6 +75,14 @@ class SheetsWriteRequest(BaseModel):
     sheet_name: str
     data: Dict[str, Any]
     mapping_type: str = "assessment"
+    # 会議用の追加フィールド
+    write_mode: str = "mapping"  # "mapping" (fixed cell) or "append" (row append)
+    meeting_type: str = ""  # "service_meeting" or "management_meeting"
+    # 運営会議用の追加フィールド
+    date_str: str = ""
+    time_str: str = ""
+    place: str = ""
+    participants: str = ""
 
 
 class GenogramRequest(BaseModel):
@@ -166,15 +174,50 @@ async def analyze_pdf(file: UploadFile = File(...)):
 async def write_to_sheets(request: SheetsWriteRequest):
     """
     Googleスプレッドシートへの書き込み
+    - write_mode="mapping": マッピングに基づく固定セル書き込み（アセスメントシート用）
+    - write_mode="append": 行追加書き込み（会議用）
     """
     try:
-        result = sheets_service.write_data(
-            spreadsheet_id=request.spreadsheet_id,
-            sheet_name=request.sheet_name,
-            data=request.data,
-            mapping_type=request.mapping_type
-        )
-        return AnalyzeResponse(success=True, data={"written_cells": result})
+        # 書き込みモードに応じて分岐
+        if request.write_mode == "append":
+            # 行追加モード（会議用）
+            if request.meeting_type == "service_meeting":
+                result = sheets_service.write_service_meeting_to_row(
+                    spreadsheet_id=request.spreadsheet_id,
+                    data_dict=request.data,
+                    sheet_name=request.sheet_name or "貼り付け用"
+                )
+            elif request.meeting_type == "management_meeting":
+                result = sheets_service.write_management_meeting_to_row(
+                    spreadsheet_id=request.spreadsheet_id,
+                    data=request.data,
+                    date_str=request.date_str,
+                    time_str=request.time_str,
+                    place=request.place,
+                    participants=request.participants,
+                    sheet_name=request.sheet_name or "貼り付け用"
+                )
+            else:
+                # デフォルトはサービス担当者会議形式
+                result = sheets_service.write_service_meeting_to_row(
+                    spreadsheet_id=request.spreadsheet_id,
+                    data_dict=request.data,
+                    sheet_name=request.sheet_name or "貼り付け用"
+                )
+            return AnalyzeResponse(
+                success=result.get("success", False),
+                data=result,
+                error=result.get("error")
+            )
+        else:
+            # マッピングモード（アセスメントシート用 - 既存動作）
+            written_count = sheets_service.write_data(
+                spreadsheet_id=request.spreadsheet_id,
+                sheet_name=request.sheet_name,
+                data=request.data,
+                mapping_type=request.mapping_type
+            )
+            return AnalyzeResponse(success=True, data={"written_cells": written_count})
     except Exception as e:
         return AnalyzeResponse(success=False, error=str(e))
 

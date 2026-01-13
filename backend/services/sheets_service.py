@@ -258,16 +258,26 @@ class SheetsService:
                 })
                 written_count += 1
         
-        # バッチ更新
+        # バッチ更新（care-dx-appと同じ効率的な方式）
         print(f"DEBUG: Cells to update: {len(cells_to_update)}", flush=True)
         if cells_to_update:
             print(f"DEBUG: First 5 cells: {cells_to_update[:5]}", flush=True)
-            for cell_data in cells_to_update:
-                try:
-                    worksheet.update_acell(cell_data["cell"], cell_data["value"])
-                    print(f"DEBUG: Updated cell {cell_data['cell']}", flush=True)
-                except Exception as e:
-                    print(f"Failed to update cell {cell_data['cell']}: {e}", flush=True)
+            try:
+                # バッチ更新用のデータ形式に変換
+                updates = [
+                    {'range': cell_data["cell"], 'values': [[cell_data["value"]]]}
+                    for cell_data in cells_to_update
+                ]
+                worksheet.batch_update(updates)
+                print(f"DEBUG: Batch updated {len(updates)} cells successfully", flush=True)
+            except Exception as e:
+                print(f"ERROR: Batch update failed: {e}", flush=True)
+                # フォールバック: 1セルずつ更新
+                for cell_data in cells_to_update:
+                    try:
+                        worksheet.update_acell(cell_data["cell"], cell_data["value"])
+                    except Exception as e2:
+                        print(f"Failed to update cell {cell_data['cell']}: {e2}", flush=True)
         else:
             print("DEBUG: No cells to update - mapping did not match any data fields", flush=True)
         
@@ -306,3 +316,166 @@ class SheetsService:
         
         spreadsheet = self.client.open_by_key(spreadsheet_id)
         return [ws.title for ws in spreadsheet.worksheets()]
+
+    def write_service_meeting_to_row(
+        self,
+        spreadsheet_id: str,
+        data_dict: Dict[str, Any],
+        sheet_name: str = "貼り付け用"
+    ) -> Dict[str, Any]:
+        """
+        サービス担当者会議のデータを行追加で書き込み（care-dx-app互換）
+        - 1行目のヘッダーを読み取り、データキーとマッチング
+        - 最終行の次に新しい行を追加
+        """
+        print(f"DEBUG: write_service_meeting_to_row called", flush=True)
+        
+        if not self.client:
+            raise ValueError("Google Sheets client not initialized")
+        
+        try:
+            spreadsheet = self.client.open_by_key(spreadsheet_id)
+            
+            try:
+                worksheet = spreadsheet.worksheet(sheet_name)
+            except:
+                # シートがなければ作成
+                worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=100, cols=20)
+                print(f"DEBUG: Created new worksheet: {sheet_name}", flush=True)
+            
+            # 1行目のヘッダーを取得
+            headers = worksheet.row_values(1)
+            if not headers:
+                print("DEBUG: No headers found, cannot write", flush=True)
+                return {"success": False, "error": "ヘッダーがありません", "write_count": 0}
+            
+            print(f"DEBUG: Headers found: {headers}", flush=True)
+            
+            # データをフラット化
+            flat_data = self._flatten_data(data_dict)
+            
+            # 書き込みデータの準備（ヘッダー順に並べる）
+            row_data = []
+            for header in headers:
+                val = ""
+                # データのキーとヘッダーを柔軟にマッチング（完全一致または部分一致）
+                for key, value in flat_data.items():
+                    if key in header or header in key:
+                        # リストの場合は改行区切りの文字列に変換
+                        if isinstance(value, list):
+                            val = "\n".join([str(item) for item in value])
+                        else:
+                            val = str(value) if value else ""
+                        break
+                row_data.append(val)
+            
+            # 最終行の次の行に追加
+            worksheet.append_row(row_data)
+            print(f"DEBUG: Appended row with {len(row_data)} columns", flush=True)
+            
+            return {
+                "success": True,
+                "sheet_url": spreadsheet.url,
+                "write_count": 1
+            }
+            
+        except Exception as e:
+            print(f"ERROR: write_service_meeting_to_row failed: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e), "write_count": 0}
+
+    def write_management_meeting_to_row(
+        self,
+        spreadsheet_id: str,
+        data: Dict[str, Any],
+        date_str: str = "",
+        time_str: str = "",
+        place: str = "",
+        participants: str = "",
+        sheet_name: str = "貼り付け用"
+    ) -> Dict[str, Any]:
+        """
+        運営会議のデータを行追加で書き込み（care-dx-app互換）
+        - ヘッダー: 日時, 開催場所, 参加者, 議題項目, 24時間対応, 共有事項
+        - 最終行の次に新しい行を追加
+        """
+        print(f"DEBUG: write_management_meeting_to_row called", flush=True)
+        
+        if not self.client:
+            raise ValueError("Google Sheets client not initialized")
+        
+        try:
+            spreadsheet = self.client.open_by_key(spreadsheet_id)
+            
+            try:
+                worksheet = spreadsheet.worksheet(sheet_name)
+            except:
+                # シートがなければ作成してヘッダーを追加
+                worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=100, cols=20)
+                worksheet.append_row(["日時", "開催場所", "参加者", "議題項目", "24時間対応", "共有事項"])
+                print(f"DEBUG: Created new worksheet with headers: {sheet_name}", flush=True)
+            
+            # ヘッダーを読み込む
+            headers = worksheet.row_values(1)
+            if not headers:
+                # ヘッダーがない場合は作成して再取得
+                headers = ["日時", "開催場所", "参加者", "議題項目", "24時間対応", "共有事項"]
+                worksheet.append_row(headers)
+            
+            print(f"DEBUG: Headers: {headers}", flush=True)
+            
+            # データの準備
+            # 日時
+            ui_dt = f"{date_str} {time_str}".strip()
+            ai_dt = data.get("meeting_date", "")
+            val_date = ui_dt if (date_str and time_str) else (ai_dt if ai_dt else ui_dt)
+            
+            # 参加者
+            val_participants = participants if participants else data.get("participants", "")
+            
+            # 場所
+            val_place = place if place else data.get("place", "")
+            
+            # その他
+            val_agenda = data.get("agenda", "")
+            val_24h = data.get("support_24h", "")
+            val_sharing = data.get("sharing_matters", "")
+            
+            # 行データの構築（ヘッダーにマッチ）
+            row_data = []
+            for header in headers:
+                h = header.strip()
+                if "日時" in h:
+                    row_data.append(val_date)
+                elif "参加者" in h:
+                    row_data.append(val_participants)
+                elif "場所・共有" in h:
+                    # 結合カラム
+                    row_data.append(f"場所: {val_place}\n\n{val_sharing}")
+                elif "場所" in h:
+                    row_data.append(val_place)
+                elif "共有" in h:
+                    row_data.append(val_sharing)
+                elif "議題" in h:
+                    row_data.append(val_agenda)
+                elif "24時間" in h:
+                    row_data.append(val_24h)
+                else:
+                    row_data.append("")  # 不明なカラムは空
+            
+            # 追記実行
+            worksheet.append_row(row_data)
+            print(f"DEBUG: Appended management meeting row with {len(row_data)} columns", flush=True)
+            
+            return {
+                "success": True,
+                "sheet_url": spreadsheet.url,
+                "write_count": 1
+            }
+            
+        except Exception as e:
+            print(f"ERROR: write_management_meeting_to_row failed: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e), "write_count": 0}
