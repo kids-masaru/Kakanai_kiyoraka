@@ -7,6 +7,7 @@ import os
 import io
 import time
 import re
+import tempfile
 from typing import Dict, Any, Optional
 
 
@@ -66,18 +67,21 @@ class AIService:
     
     def extract_assessment_from_audio(self, audio_data: bytes) -> Dict[str, Any]:
         """音声データからアセスメント情報を抽出"""
-        # アップロード
-        uploaded_file = genai.upload_file(
-            io.BytesIO(audio_data),
-            mime_type="audio/mp4"
-        )
+        # 一時ファイルに保存してからアップロード
+        with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as tmp:
+            tmp.write(audio_data)
+            tmp_path = tmp.name
         
-        # Processing待機
-        while uploaded_file.state.name == "PROCESSING":
-            time.sleep(1)
-            uploaded_file = genai.get_file(uploaded_file.name)
+        uploaded_file = None
+        try:
+            uploaded_file = genai.upload_file(tmp_path, mime_type="audio/mp4")
+            
+            # Processing待機
+            while uploaded_file.state.name == "PROCESSING":
+                time.sleep(1)
+                uploaded_file = genai.get_file(uploaded_file.name)
         
-        prompt = """
+            prompt = """
 あなたは、ベテランの認定調査員であり、ケアマネージャーです。
 提供された音声データ（アセスメント面談の録音）を注意深く聞き取り、
 「アセスメントシート（基本情報、課題分析、認定調査票）」を作成するために必要な情報を抽出してください。
@@ -87,7 +91,7 @@ class AIService:
 ## 抽出方針
 - 会話の中から「事実関係」「本人の発言」「家族の発言」「専門職の判断」を拾う
 - 雑談は除外する
-- 不明な項目は "（空白）" とする
+- 不明な項目は \"（空白）\" とする
 
 ## 出力JSONフォーマット
 {
@@ -116,29 +120,38 @@ class AIService:
   }
 }
 """
-        try:
             response = self._generate_with_retry([uploaded_file, prompt])
             text = self._clean_json_response(response.text)
             return json.loads(text)
         finally:
             # クリーンアップ
+            if uploaded_file:
+                try:
+                    genai.delete_file(uploaded_file.name)
+                except:
+                    pass
+            # 一時ファイル削除
             try:
-                genai.delete_file(uploaded_file.name)
+                os.unlink(tmp_path)
             except:
                 pass
     
     def generate_meeting_summary(self, audio_data: bytes) -> Dict[str, Any]:
         """音声データから会議録を生成"""
-        uploaded_file = genai.upload_file(
-            io.BytesIO(audio_data),
-            mime_type="audio/mp4"
-        )
+        # 一時ファイルに保存してからアップロード
+        with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as tmp:
+            tmp.write(audio_data)
+            tmp_path = tmp.name
         
-        while uploaded_file.state.name == "PROCESSING":
-            time.sleep(1)
-            uploaded_file = genai.get_file(uploaded_file.name)
-        
-        prompt = """
+        uploaded_file = None
+        try:
+            uploaded_file = genai.upload_file(tmp_path, mime_type="audio/mp4")
+            
+            while uploaded_file.state.name == "PROCESSING":
+                time.sleep(1)
+                uploaded_file = genai.get_file(uploaded_file.name)
+            
+            prompt = """
 あなたはケアマネジメントの専門家であり、医療・福祉分野のプロの記録担当者です。
 アップロードされたデータを注意深く分析し、公式な会議録を作成します。
 
@@ -155,28 +168,36 @@ class AIService:
   "結論": "決定事項リスト"
 }
 """
-        try:
             response = self._generate_with_retry([uploaded_file, prompt])
             text = self._clean_json_response(response.text)
             return json.loads(text)
         finally:
+            if uploaded_file:
+                try:
+                    genai.delete_file(uploaded_file.name)
+                except:
+                    pass
             try:
-                genai.delete_file(uploaded_file.name)
+                os.unlink(tmp_path)
             except:
                 pass
     
     def extract_qa_from_audio(self, audio_data: bytes) -> Dict[str, Any]:
         """音声データからQ&A形式で抽出"""
-        uploaded_file = genai.upload_file(
-            io.BytesIO(audio_data),
-            mime_type="audio/mp4"
-        )
+        # 一時ファイルに保存してからアップロード
+        with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as tmp:
+            tmp.write(audio_data)
+            tmp_path = tmp.name
         
-        while uploaded_file.state.name == "PROCESSING":
-            time.sleep(1)
-            uploaded_file = genai.get_file(uploaded_file.name)
-        
-        prompt = """
+        uploaded_file = None
+        try:
+            uploaded_file = genai.upload_file(tmp_path, mime_type="audio/mp4")
+            
+            while uploaded_file.state.name == "PROCESSING":
+                time.sleep(1)
+                uploaded_file = genai.get_file(uploaded_file.name)
+            
+            prompt = """
 提供された音声データを質問と回答のペアとして抽出してください。
 
 出力形式：
@@ -187,13 +208,17 @@ class AIService:
   ]
 }
 """
-        try:
             response = self._generate_with_retry([uploaded_file, prompt])
             text = self._clean_json_response(response.text)
             return json.loads(text)
         finally:
+            if uploaded_file:
+                try:
+                    genai.delete_file(uploaded_file.name)
+                except:
+                    pass
             try:
-                genai.delete_file(uploaded_file.name)
+                os.unlink(tmp_path)
             except:
                 pass
     
