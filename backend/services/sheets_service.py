@@ -2,7 +2,7 @@
 Sheets Service - Google Sheets統合（マッピング対応版）
 """
 import gspread
-from google.oauth2.service_account import Credentials
+from oauth2client.service_account import ServiceAccountCredentials
 import os
 import json
 import re
@@ -14,9 +14,9 @@ CONFIG_DIR = Path(__file__).parent.parent / "config"
 MAPPING_FILE = CONFIG_DIR / "mapping.txt"
 MAPPING2_FILE = CONFIG_DIR / "mapping2.txt"
 
-# Google Sheets APIスコープ
+# Google Sheets APIスコープ（care-dx-appと同じ設定）
 SCOPES = [
-    'https://www.googleapis.com/auth/spreadsheets',
+    'https://spreadsheets.google.com/feeds',
     'https://www.googleapis.com/auth/drive'
 ]
 
@@ -30,8 +30,11 @@ class SheetsService:
         self._load_mappings()
     
     def _initialize_client(self):
-        """Google Sheets APIクライアントを初期化（ハードコードされた認証情報を使用 - 最終手段）"""
+        """Google Sheets APIクライアントを初期化（oauth2clientライブラリ使用 - care-dx-app互換）"""
+        import base64
         import datetime
+        
+        # サーバー時刻のログ
         print(f"DEBUG: Server time: {datetime.datetime.now()}", flush=True)
 
         # 認証情報を保持する変数
@@ -83,22 +86,18 @@ class SheetsService:
                     if "\\n" in pk:
                         pk = pk.replace("\\n", "\n")
                     
-                    # 2. ヘッダー/フッター周りの空白不足を修正（コピペミス対策）
-                    # "-----BEGIN PRIVATE KEY-----" の直後に改行がない場合
+                    # 2. ヘッダー/フッター周りの空白不足を修正
                     if "-----BEGIN PRIVATE KEY-----" in pk and "-----BEGIN PRIVATE KEY-----\n" not in pk:
                          pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
                     
-                    # "-----END PRIVATE KEY-----" の直前に改行がない場合
                     if "-----END PRIVATE KEY-----" in pk and "\n-----END PRIVATE KEY-----" not in pk:
                          pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
                     
-                    # 3. 秘密鍵本体のスペースを改行に置換（環境変数で改行がスペース化された場合）
-                    # ヘッダー・フッターを除いた部分を取得
+                    # 3. 秘密鍵本体のスペースを改行に置換
                     import re
                     match = re.search(r"-----BEGIN PRIVATE KEY-----\n(.*?)\n-----END PRIVATE KEY-----", pk, re.DOTALL)
                     if match:
                         body = match.group(1)
-                        # 明らかにスペースが含まれていて、改行が少ない場合
                         if " " in body and body.count("\n") < 5:
                              print("DEBUG: Detected spaces in private key body, attempting to fix...", flush=True)
                              new_body = body.replace(" ", "\n")
@@ -111,11 +110,12 @@ class SheetsService:
 
                 print(f"DEBUG: Attempting auth for: {service_account_info.get('client_email')}", flush=True)
                 
-                credentials = Credentials.from_service_account_info(
-                    service_account_info, scopes=SCOPES
+                # oauth2clientを使用（care-dx-appと同じ）
+                credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+                    service_account_info, SCOPES
                 )
                 self.client = gspread.authorize(credentials)
-                print("Google Sheets client initialized successfully", flush=True)
+                print("Google Sheets client initialized successfully (oauth2client)", flush=True)
                 return
 
             except Exception as e:
