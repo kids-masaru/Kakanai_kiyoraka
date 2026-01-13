@@ -36,6 +36,11 @@ class SheetsService:
         if service_account_json:
             try:
                 service_account_info = json.loads(service_account_json)
+                
+                # private_keyの\\nを実際の改行に変換（環境変数での\nエスケープ問題対策）
+                if "private_key" in service_account_info:
+                    service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
+                
                 credentials = ServiceAccountCredentials.from_json_keyfile_dict(
                     service_account_info, scope
                 )
