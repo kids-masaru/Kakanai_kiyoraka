@@ -166,7 +166,9 @@ class SheetsService:
         print("DEBUG: === Credential Diagnosis ===", flush=True)
         try:
             import hashlib
-            print(f"DEBUG: Library versions: gspread={gspread.__version__}", flush=True)
+            import rsa
+            import pyasn1
+            print(f"DEBUG: Library versions: gspread={gspread.__version__}, rsa={rsa.__version__}, pyasn1={pyasn1.__version__}", flush=True)
             
             # Email Check
             email = info.get("client_email", "MISSING")
