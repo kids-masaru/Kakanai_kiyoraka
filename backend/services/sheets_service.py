@@ -102,6 +102,11 @@ class SheetsService:
                              print("DEBUG: Detected spaces in private key body, attempting to fix...", flush=True)
                              new_body = body.replace(" ", "\n")
                              pk = pk.replace(body, new_body)
+                        # 4. 改行が全くない場合（1行になっている場合）、64文字ごとに改行を挿入
+                        elif "\n" not in body:
+                             print("DEBUG: Detected single-line private key body, fixing...", flush=True)
+                             new_body = '\n'.join(body[i:i+64] for i in range(0, len(body), 64))
+                             pk = pk.replace(body, new_body)
 
                     service_account_info["private_key"] = pk
                     
