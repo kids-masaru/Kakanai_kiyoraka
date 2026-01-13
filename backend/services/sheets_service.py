@@ -2,7 +2,7 @@
 Sheets Service - Google Sheets統合（マッピング対応版）
 """
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 import os
 import json
 import re
@@ -14,6 +14,12 @@ CONFIG_DIR = Path(__file__).parent.parent / "config"
 MAPPING_FILE = CONFIG_DIR / "mapping.txt"
 MAPPING2_FILE = CONFIG_DIR / "mapping2.txt"
 
+# Google Sheets APIスコープ
+SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+]
+
 
 class SheetsService:
     def __init__(self):
@@ -24,44 +30,27 @@ class SheetsService:
         self._load_mappings()
     
     def _initialize_client(self):
-        """Google Sheets APIクライアントを初期化（Base64方式を優先）"""
+        """Google Sheets APIクライアントを初期化（google-authライブラリ使用）"""
         import base64
         
-        scope = [
-            'https://spreadsheets.google.com/feeds',
-            'https://www.googleapis.com/auth/drive'
-        ]
-        
-        # 1. Base64エンコードされた環境変数から認証（一時ファイル経由で元のアプリと同じ方式）
+        # 1. Base64エンコードされた環境変数から認証
         service_account_base64 = os.getenv("GOOGLE_SERVICE_ACCOUNT_BASE64")
         
         if service_account_base64:
-            import tempfile
             try:
                 # Base64をデコード（余分な空白を削除）
                 service_account_base64 = service_account_base64.strip()
                 decoded_bytes = base64.b64decode(service_account_base64)
+                service_account_info = json.loads(decoded_bytes.decode('utf-8'))
                 
-                # 一時ファイルに書き込み（元のcare-dx-appと同じfrom_json_keyfile_name方式）
-                with tempfile.NamedTemporaryFile(mode='wb', suffix='.json', delete=False) as tmp:
-                    tmp.write(decoded_bytes)
-                    tmp_path = tmp.name
+                print(f"DEBUG: Loaded service account for: {service_account_info.get('client_email')}", flush=True)
                 
-                print(f"DEBUG: Created temp file at: {tmp_path}", flush=True)
-                
-                # ファイルから認証（元のcare-dx-appと同じ方式）
-                credentials = ServiceAccountCredentials.from_json_keyfile_name(
-                    tmp_path, scope
+                # google-authライブラリで認証
+                credentials = Credentials.from_service_account_info(
+                    service_account_info, scopes=SCOPES
                 )
                 self.client = gspread.authorize(credentials)
-                print("Google Sheets client initialized from Base64 (via temp file)", flush=True)
-                
-                # 一時ファイルを削除
-                try:
-                    os.unlink(tmp_path)
-                except:
-                    pass
-                
+                print("Google Sheets client initialized from Base64 (google-auth)", flush=True)
                 return
             except Exception as e:
                 print(f"Failed to initialize from Base64 env var: {e}", flush=True)
@@ -71,11 +60,11 @@ class SheetsService:
         
         if service_account_file.exists():
             try:
-                credentials = ServiceAccountCredentials.from_json_keyfile_name(
-                    str(service_account_file), scope
+                credentials = Credentials.from_service_account_file(
+                    str(service_account_file), scopes=SCOPES
                 )
                 self.client = gspread.authorize(credentials)
-                print(f"Google Sheets client initialized from file: {service_account_file}")
+                print(f"Google Sheets client initialized from file: {service_account_file}", flush=True)
                 return
             except Exception as e:
                 print(f"Failed to initialize from file: {e}")
