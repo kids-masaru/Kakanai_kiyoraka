@@ -38,7 +38,21 @@ class SheetsService:
         # サーバー時刻のログ（JWT署名エラーの原因調査用）
         print(f"DEBUG: Server time: {datetime.datetime.now()}", flush=True)
 
-        # 1. Base64エンコードされた環境変数から認証
+        # 1. ファイルから認証（最優先：改行コード問題を回避するため）
+        service_account_file = CONFIG_DIR / "service_account.json"
+        
+        if service_account_file.exists():
+            try:
+                credentials = Credentials.from_service_account_file(
+                    str(service_account_file), scopes=SCOPES
+                )
+                self.client = gspread.authorize(credentials)
+                print(f"Google Sheets client initialized from file: {service_account_file}", flush=True)
+                return
+            except Exception as e:
+                print(f"Failed to initialize from file: {e}", flush=True)
+
+        # 2. Base64エンコードされた環境変数から認証
         service_account_base64 = os.getenv("GOOGLE_SERVICE_ACCOUNT_BASE64")
         
         if service_account_base64:
@@ -59,7 +73,7 @@ class SheetsService:
             except Exception as e:
                 print(f"Failed to initialize from Base64 env var: {e}", flush=True)
 
-        # 2. Raw JSON文字列環境変数から認証（ユーザー指定のフォーマット）
+        # 3. Raw JSON文字列環境変数から認証（ユーザー指定のフォーマット）
         service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
         
         if service_account_json:
@@ -84,20 +98,6 @@ class SheetsService:
                 return
             except Exception as e:
                 print(f"Failed to initialize from JSON env var: {e}", flush=True)
-        
-        # 3. ファイルから認証（ローカル開発用）
-        service_account_file = CONFIG_DIR / "service_account.json"
-        
-        if service_account_file.exists():
-            try:
-                credentials = Credentials.from_service_account_file(
-                    str(service_account_file), scopes=SCOPES
-                )
-                self.client = gspread.authorize(credentials)
-                print(f"Google Sheets client initialized from file: {service_account_file}", flush=True)
-                return
-            except Exception as e:
-                print(f"Failed to initialize from file: {e}")
         
         print("No service account configuration found")
         self.client = None

@@ -50,8 +50,8 @@ temp_*
 *.tmp
 
 # Config files (contains sensitive data - but allow mapping files)
-config/service_account.json
-backend/config/service_account.json
+# config/service_account.json
+# backend/config/service_account.json
 !config/mapping.txt
 !config/mapping2.txt
 !config/upload_icon.png
