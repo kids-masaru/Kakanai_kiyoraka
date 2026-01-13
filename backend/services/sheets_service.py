@@ -24,13 +24,33 @@ class SheetsService:
         self._load_mappings()
     
     def _initialize_client(self):
-        """Google Sheets APIクライアントを初期化（元のcare-dx-appと同じ方式）"""
+        """Google Sheets APIクライアントを初期化（Base64方式を優先）"""
+        import base64
+        
         scope = [
             'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
         
-        # 1. ファイルから認証（元のcare-dx-appと同じ方式）
+        # 1. Base64エンコードされた環境変数から認証（推奨・セキュア）
+        service_account_base64 = os.getenv("GOOGLE_SERVICE_ACCOUNT_BASE64")
+        
+        if service_account_base64:
+            try:
+                # Base64をデコードしてJSONに変換
+                decoded_bytes = base64.b64decode(service_account_base64)
+                service_account_info = json.loads(decoded_bytes.decode('utf-8'))
+                
+                credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+                    service_account_info, scope
+                )
+                self.client = gspread.authorize(credentials)
+                print("Google Sheets client initialized from Base64 environment variable")
+                return
+            except Exception as e:
+                print(f"Failed to initialize from Base64 env var: {e}")
+        
+        # 2. ファイルから認証（ローカル開発用）
         service_account_file = CONFIG_DIR / "service_account.json"
         
         if service_account_file.exists():
@@ -44,7 +64,7 @@ class SheetsService:
             except Exception as e:
                 print(f"Failed to initialize from file: {e}")
         
-        # 2. 環境変数からの認証（フォールバック）
+        # 3. JSON環境変数からの認証（レガシーフォールバック）
         service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
         
         if service_account_json:
@@ -59,13 +79,13 @@ class SheetsService:
                     service_account_info, scope
                 )
                 self.client = gspread.authorize(credentials)
-                print("Google Sheets client initialized from environment variable")
+                print("Google Sheets client initialized from JSON environment variable")
+                return
             except Exception as e:
-                print(f"Failed to initialize from env var: {e}")
-                self.client = None
-        else:
-            print("No service account configuration found")
-            self.client = None
+                print(f"Failed to initialize from JSON env var: {e}")
+        
+        print("No service account configuration found")
+        self.client = None
     
     def _load_mappings(self):
         """マッピングファイルを読み込み"""
