@@ -33,6 +33,11 @@ class SheetsService:
         """Google Sheets APIクライアントを初期化（google-authライブラリ使用）"""
         import base64
         
+        import datetime
+        
+        # サーバー時刻のログ（JWT署名エラーの原因調査用）
+        print(f"DEBUG: Server time: {datetime.datetime.now()}", flush=True)
+
         # 1. Base64エンコードされた環境変数から認証
         service_account_base64 = os.getenv("GOOGLE_SERVICE_ACCOUNT_BASE64")
         
@@ -45,7 +50,6 @@ class SheetsService:
                 
                 print(f"DEBUG: Loaded service account for: {service_account_info.get('client_email')}", flush=True)
                 
-                # google-authライブラリで認証
                 credentials = Credentials.from_service_account_info(
                     service_account_info, scopes=SCOPES
                 )
@@ -54,8 +58,34 @@ class SheetsService:
                 return
             except Exception as e:
                 print(f"Failed to initialize from Base64 env var: {e}", flush=True)
+
+        # 2. Raw JSON文字列環境変数から認証（ユーザー指定のフォーマット）
+        service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
         
-        # 2. ファイルから認証（ローカル開発用）
+        if service_account_json:
+            try:
+                # JSONとしてパース
+                service_account_info = json.loads(service_account_json)
+                
+                # private_keyの改行コードを正規化
+                if "private_key" in service_account_info:
+                    private_key = service_account_info["private_key"]
+                    # \n が文字として入っている場合は実際の改行に置換
+                    if "\\n" in private_key:
+                        service_account_info["private_key"] = private_key.replace("\\n", "\n")
+                
+                print(f"DEBUG: Loaded service account (Raw JSON) for: {service_account_info.get('client_email')}", flush=True)
+                
+                credentials = Credentials.from_service_account_info(
+                    service_account_info, scopes=SCOPES
+                )
+                self.client = gspread.authorize(credentials)
+                print("Google Sheets client initialized from JSON env var (google-auth)", flush=True)
+                return
+            except Exception as e:
+                print(f"Failed to initialize from JSON env var: {e}", flush=True)
+        
+        # 3. ファイルから認証（ローカル開発用）
         service_account_file = CONFIG_DIR / "service_account.json"
         
         if service_account_file.exists():
@@ -68,26 +98,6 @@ class SheetsService:
                 return
             except Exception as e:
                 print(f"Failed to initialize from file: {e}")
-        
-        # 3. JSON環境変数からの認証（レガシーフォールバック）
-        service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-        
-        if service_account_json:
-            try:
-                service_account_info = json.loads(service_account_json)
-                
-                # private_keyの\\nを実際の改行に変換
-                if "private_key" in service_account_info:
-                    service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
-                
-                credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-                    service_account_info, scope
-                )
-                self.client = gspread.authorize(credentials)
-                print("Google Sheets client initialized from JSON environment variable")
-                return
-            except Exception as e:
-                print(f"Failed to initialize from JSON env var: {e}")
         
         print("No service account configuration found")
         self.client = None
