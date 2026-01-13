@@ -344,8 +344,14 @@ class SheetsService:
             worksheet = spreadsheet.sheet1
         
         # データをフラット化
-        flat_data = self._flatten_data(data)
-        print(f"DEBUG: Flattened data keys: {list(flat_data.keys())}", flush=True)
+        print("DEBUG: Flattening data...", flush=True)
+        try:
+            flat_data = self._flatten_data(data)
+            print(f"DEBUG: Flattened data keys: {list(flat_data.keys())}", flush=True)
+        except Exception as e:
+            print(f"ERROR: Failed to flatten data: {e}", flush=True)
+            raise
+
         print(f"DEBUG: Mapping keys (first 10): {list(mapping.keys())[:10]}", flush=True)
         
         # バッチ更新用のリスト
@@ -353,42 +359,51 @@ class SheetsService:
         written_count = 0
         
         # マッピングに基づいてセルを更新
-        for item_name, mapping_info in mapping.items():
-            cell = mapping_info.get("cell")
-            if not cell:
-                continue
+        try:
+            for item_name, mapping_info in mapping.items():
+                cell = mapping_info.get("cell")
+                if not cell:
+                    continue
+                
+                # データから値を取得（完全一致または部分一致）
+                value = None
+                if item_name in flat_data:
+                    value = flat_data[item_name]
+                else:
+                    # 部分一致を試みる
+                    for data_key, data_value in flat_data.items():
+                        if item_name in data_key or data_key in item_name:
+                            value = data_value
+                            break
+                
+                if value and value != "（空白）":
+                    cells_to_update.append({
+                        "cell": cell,
+                        "value": value
+                    })
+                    written_count += 1
             
-            # データから値を取得（完全一致または部分一致）
-            value = None
-            if item_name in flat_data:
-                value = flat_data[item_name]
+            # 更新実行
+            print(f"DEBUG: Cells to update: {len(cells_to_update)}", flush=True)
+            if cells_to_update:
+                print(f"DEBUG: First 5 cells: {cells_to_update[:5]}", flush=True)
+                for cell_data in cells_to_update:
+                    try:
+                        print(f"DEBUG: Updating cell {cell_data['cell']} with value: {cell_data['value']}", flush=True)
+                        worksheet.update_acell(cell_data["cell"], cell_data["value"])
+                        print(f"DEBUG: Updated cell {cell_data['cell']}", flush=True)
+                    except Exception as e:
+                        print(f"ERROR: Failed to update cell {cell_data['cell']}: {e}", flush=True)
+                        raise # 再送してエラー詳細をキャッチさせる
             else:
-                # 部分一致を試みる
-                for data_key, data_value in flat_data.items():
-                    if item_name in data_key or data_key in item_name:
-                        value = data_value
-                        break
-            
-            if value and value != "（空白）":
-                cells_to_update.append({
-                    "cell": cell,
-                    "value": value
-                })
-                written_count += 1
-        
-        # バッチ更新
-        print(f"DEBUG: Cells to update: {len(cells_to_update)}", flush=True)
-        if cells_to_update:
-            print(f"DEBUG: First 5 cells: {cells_to_update[:5]}", flush=True)
-            for cell_data in cells_to_update:
-                try:
-                    worksheet.update_acell(cell_data["cell"], cell_data["value"])
-                    print(f"DEBUG: Updated cell {cell_data['cell']}", flush=True)
-                except Exception as e:
-                    print(f"Failed to update cell {cell_data['cell']}: {e}", flush=True)
-        else:
-            print("DEBUG: No cells to update - mapping did not match any data fields", flush=True)
-        
+                print("DEBUG: No cells to update - mapping did not match any data fields", flush=True)
+                
+        except Exception as e:
+            print(f"ERROR: Error during cell update loop: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            raise
+
         return written_count
     
     def read_data(
