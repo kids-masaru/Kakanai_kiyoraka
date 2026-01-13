@@ -32,26 +32,36 @@ class SheetsService:
             'https://www.googleapis.com/auth/drive'
         ]
         
-        # 1. Base64エンコードされた環境変数から認証（推奨・セキュア）
+        # 1. Base64エンコードされた環境変数から認証（一時ファイル経由で元のアプリと同じ方式）
         service_account_base64 = os.getenv("GOOGLE_SERVICE_ACCOUNT_BASE64")
         
         if service_account_base64:
+            import tempfile
             try:
-                # Base64をデコードしてJSONに変換（余分な空白を削除）
+                # Base64をデコード（余分な空白を削除）
                 service_account_base64 = service_account_base64.strip()
                 decoded_bytes = base64.b64decode(service_account_base64)
-                service_account_info = json.loads(decoded_bytes.decode('utf-8'))
                 
-                # private_keyの検証用ログ
-                pk = service_account_info.get("private_key", "")
-                print(f"DEBUG: private_key starts with: {repr(pk[:50])}", flush=True)
-                print(f"DEBUG: private_key ends with: {repr(pk[-50:])}", flush=True)
+                # 一時ファイルに書き込み（元のcare-dx-appと同じfrom_json_keyfile_name方式）
+                with tempfile.NamedTemporaryFile(mode='wb', suffix='.json', delete=False) as tmp:
+                    tmp.write(decoded_bytes)
+                    tmp_path = tmp.name
                 
-                credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-                    service_account_info, scope
+                print(f"DEBUG: Created temp file at: {tmp_path}", flush=True)
+                
+                # ファイルから認証（元のcare-dx-appと同じ方式）
+                credentials = ServiceAccountCredentials.from_json_keyfile_name(
+                    tmp_path, scope
                 )
                 self.client = gspread.authorize(credentials)
-                print("Google Sheets client initialized from Base64 environment variable")
+                print("Google Sheets client initialized from Base64 (via temp file)", flush=True)
+                
+                # 一時ファイルを削除
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+                
                 return
             except Exception as e:
                 print(f"Failed to initialize from Base64 env var: {e}", flush=True)
