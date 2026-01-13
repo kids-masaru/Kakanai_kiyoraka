@@ -30,78 +30,101 @@ class SheetsService:
         self._load_mappings()
     
     def _initialize_client(self):
-        """Google Sheets APIクライアントを初期化（google-authライブラリ使用）"""
-        import base64
-        
+        """Google Sheets APIクライアントを初期化（ハードコードされた認証情報を使用 - 最終手段）"""
         import datetime
-        
-        # サーバー時刻のログ（JWT署名エラーの原因調査用）
         print(f"DEBUG: Server time: {datetime.datetime.now()}", flush=True)
 
-        # 1. ファイルから認証（最優先：改行コード問題を回避するため）
-        service_account_file = CONFIG_DIR / "service_account.json"
-        
-        if service_account_file.exists():
-            try:
-                credentials = Credentials.from_service_account_file(
-                    str(service_account_file), scopes=SCOPES
-                )
-                self.client = gspread.authorize(credentials)
-                print(f"Google Sheets client initialized from file: {service_account_file}", flush=True)
-                return
-            except Exception as e:
-                print(f"Failed to initialize from file: {e}", flush=True)
+        # 認証情報を保持する変数
+        service_account_info = None
 
-        # 2. Base64エンコードされた環境変数から認証
-        service_account_base64 = os.getenv("GOOGLE_SERVICE_ACCOUNT_BASE64")
-        
-        if service_account_base64:
-            try:
-                # Base64をデコード（余分な空白を削除）
-                service_account_base64 = service_account_base64.strip()
-                decoded_bytes = base64.b64decode(service_account_base64)
-                service_account_info = json.loads(decoded_bytes.decode('utf-8'))
-                
-                print(f"DEBUG: Loaded service account for: {service_account_info.get('client_email')}", flush=True)
-                
-                credentials = Credentials.from_service_account_info(
-                    service_account_info, scopes=SCOPES
-                )
-                self.client = gspread.authorize(credentials)
-                print("Google Sheets client initialized from Base64 (google-auth)", flush=True)
-                return
-            except Exception as e:
-                print(f"Failed to initialize from Base64 env var: {e}", flush=True)
-
-        # 3. Raw JSON文字列環境変数から認証（ユーザー指定のフォーマット）
+        # 1. Raw JSON文字列環境変数から認証（推奨）
         service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
         
         if service_account_json:
             try:
-                # JSONとしてパース
+                print("DEBUG: Found GOOGLE_SERVICE_ACCOUNT_JSON", flush=True)
                 service_account_info = json.loads(service_account_json)
-                
-                # private_keyの改行コードを正規化
+                print("DEBUG: Successfully parsed JSON", flush=True)
+            except Exception as e:
+                print(f"Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON: {e}", flush=True)
+
+        # 2. Base64エンコードされた環境変数から認証（フォールバック）
+        if not service_account_info:
+            service_account_base64 = os.getenv("GOOGLE_SERVICE_ACCOUNT_BASE64")
+            if service_account_base64:
+                try:
+                    print("DEBUG: Found GOOGLE_SERVICE_ACCOUNT_BASE64", flush=True)
+                    service_account_base64 = service_account_base64.strip()
+                    decoded_bytes = base64.b64decode(service_account_base64)
+                    service_account_info = json.loads(decoded_bytes.decode('utf-8'))
+                    print("DEBUG: Successfully parsed Base64", flush=True)
+                except Exception as e:
+                    print(f"Failed to initialize from Base64 env var: {e}", flush=True)
+
+        # 3. ファイルから認証（ローカル開発用）
+        if not service_account_info:
+            service_account_file = CONFIG_DIR / "service_account.json"
+            if service_account_file.exists():
+                try:
+                    print(f"DEBUG: Found service_account_file at {service_account_file}", flush=True)
+                    with open(service_account_file, 'r', encoding='utf-8') as f:
+                         service_account_info = json.load(f)
+                except Exception as e:
+                    print(f"Failed to load from file: {e}", flush=True)
+
+        # 認証処理
+        if service_account_info:
+            try:
+                # private_keyの修復・正規化ロジック
                 if "private_key" in service_account_info:
-                    private_key = service_account_info["private_key"]
-                    # \n が文字として入っている場合は実際の改行に置換
-                    if "\\n" in private_key:
-                        service_account_info["private_key"] = private_key.replace("\\n", "\n")
-                
-                print(f"DEBUG: Loaded service account (Raw JSON) for: {service_account_info.get('client_email')}", flush=True)
+                    pk = service_account_info["private_key"]
+                    
+                    # 1. \n を実際の改行に置換
+                    if "\\n" in pk:
+                        pk = pk.replace("\\n", "\n")
+                    
+                    # 2. ヘッダー/フッター周りの空白不足を修正（コピペミス対策）
+                    # "-----BEGIN PRIVATE KEY-----" の直後に改行がない場合
+                    if "-----BEGIN PRIVATE KEY-----" in pk and "-----BEGIN PRIVATE KEY-----\n" not in pk:
+                         pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+                    
+                    # "-----END PRIVATE KEY-----" の直前に改行がない場合
+                    if "-----END PRIVATE KEY-----" in pk and "\n-----END PRIVATE KEY-----" not in pk:
+                         pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+                    
+                    # 3. 秘密鍵本体のスペースを改行に置換（環境変数で改行がスペース化された場合）
+                    # ヘッダー・フッターを除いた部分を取得
+                    import re
+                    match = re.search(r"-----BEGIN PRIVATE KEY-----\n(.*?)\n-----END PRIVATE KEY-----", pk, re.DOTALL)
+                    if match:
+                        body = match.group(1)
+                        # 明らかにスペースが含まれていて、改行が少ない場合
+                        if " " in body and body.count("\n") < 5:
+                             print("DEBUG: Detected spaces in private key body, attempting to fix...", flush=True)
+                             new_body = body.replace(" ", "\n")
+                             pk = pk.replace(body, new_body)
+
+                    service_account_info["private_key"] = pk
+                    
+                    # ログ確認用（最初の50文字だけ）
+                    print(f"DEBUG: Final private_key starts with: {repr(pk[:50])}", flush=True)
+
+                print(f"DEBUG: Attempting auth for: {service_account_info.get('client_email')}", flush=True)
                 
                 credentials = Credentials.from_service_account_info(
                     service_account_info, scopes=SCOPES
                 )
                 self.client = gspread.authorize(credentials)
-                print("Google Sheets client initialized from JSON env var (google-auth)", flush=True)
+                print("Google Sheets client initialized successfully", flush=True)
                 return
+
             except Exception as e:
-                print(f"Failed to initialize from JSON env var: {e}", flush=True)
-        
-        print("No service account configuration found")
-        self.client = None
-    
+                print(f"ERROR: Auth failed: {e}", flush=True)
+                self.client = None
+        else:
+            print("No service account configuration found")
+            self.client = None
+
     def _load_mappings(self):
         """マッピングファイルを読み込み"""
         print(f"DEBUG: Looking for mapping file at: {MAPPING_FILE}", flush=True)
