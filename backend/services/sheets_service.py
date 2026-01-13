@@ -77,6 +77,9 @@ class SheetsService:
 
         # 認証処理
         if service_account_info:
+            # 診断ログ出力（秘密鍵の中身は出さずに、形式的な健全性をチェック）
+            self._diagnose_credentials(service_account_info)
+
             try:
                 # private_keyの修復・正規化ロジック
                 if "private_key" in service_account_info:
@@ -107,11 +110,13 @@ class SheetsService:
                              print("DEBUG: Detected single-line private key body, fixing...", flush=True)
                              new_body = '\n'.join(body[i:i+64] for i in range(0, len(body), 64))
                              pk = pk.replace(body, new_body)
+                             print("DEBUG: Applied 64-char line wrapping fix", flush=True)
 
                     service_account_info["private_key"] = pk
                     
-                    # ログ確認用（最初の50文字だけ）
-                    print(f"DEBUG: Final private_key starts with: {repr(pk[:50])}", flush=True)
+                    # 修復後の診断
+                    print("DEBUG: --- Post-Repair Diagnosis ---", flush=True)
+                    self._diagnose_credentials(service_account_info)
 
                 print(f"DEBUG: Attempting auth for: {service_account_info.get('client_email')}", flush=True)
                 
@@ -125,10 +130,66 @@ class SheetsService:
 
             except Exception as e:
                 print(f"ERROR: Auth failed: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
                 self.client = None
         else:
             print("No service account configuration found")
             self.client = None
+
+    def _diagnose_credentials(self, info: Dict[str, Any]):
+        """認証情報の健全性を診断してログに出力（秘密情報はマスキング）"""
+        print("DEBUG: === Credential Diagnosis ===", flush=True)
+        try:
+            import hashlib
+            print(f"DEBUG: Library versions: gspread={gspread.__version__}", flush=True)
+            
+            # Email Check
+            email = info.get("client_email", "MISSING")
+            print(f"DEBUG: client_email: {email}", flush=True)
+            
+            # Project ID
+            project_id = info.get("project_id", "MISSING")
+            print(f"DEBUG: project_id: {project_id}", flush=True)
+            
+            # Private Key Analysis
+            pk = info.get("private_key", "")
+            if not pk:
+                print("DEBUG: private_key: MISSING or EMPTY", flush=True)
+                return
+            
+            print(f"DEBUG: private_key length: {len(pk)} chars", flush=True)
+            
+            # SHA256 Hash (to compare with local working key)
+            pk_hash = hashlib.sha256(pk.encode('utf-8')).hexdigest()
+            print(f"DEBUG: private_key SHA256: {pk_hash}", flush=True)
+            
+            # Structure Checks
+            has_begin = "-----BEGIN PRIVATE KEY-----" in pk
+            has_end = "-----END PRIVATE KEY-----" in pk
+            print(f"DEBUG: Header present: {has_begin}", flush=True)
+            print(f"DEBUG: Footer present: {has_end}", flush=True)
+            
+            # Content formatting
+            line_count = pk.count('\n')
+            space_count = pk.count(' ')
+            print(f"DEBUG: Newline count: {line_count}", flush=True)
+            print(f"DEBUG: Space count: {space_count}", flush=True)
+            
+            # Body Analysis (between header and footer)
+            import re
+            match = re.search(r"-----BEGIN PRIVATE KEY-----(.*?)-----END PRIVATE KEY-----", pk, re.DOTALL)
+            if match:
+                body = match.group(1)
+                print(f"DEBUG: Key body length: {len(body)} chars", flush=True)
+                print(f"DEBUG: First 20 chars of raw body: {repr(body[:20])}", flush=True)
+                print(f"DEBUG: Last 20 chars of raw body: {repr(body[-20:])}", flush=True)
+            else:
+                print("DEBUG: Could not extract key body via Regex", flush=True)
+
+        except Exception as e:
+            print(f"DEBUG: Diagnosis failed: {e}", flush=True)
+        print("DEBUG: ============================", flush=True)
 
     def _load_mappings(self):
         """マッピングファイルを読み込み"""
