@@ -121,11 +121,35 @@ class SheetsService:
                 print(f"DEBUG: Attempting auth for: {service_account_info.get('client_email')}", flush=True)
                 
                 # oauth2clientを使用（care-dx-appと同じ）
-                credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-                    service_account_info, SCOPES
-                )
+                # from_json_keyfile_dict ではなく、ファイル経由にして完全に同じ挙動にする
+                import tempfile
+                
+                # 一時ファイルにJSONを書き出す
+                # ※Railwayはephemeral filesystemなので一時ファイルは作成可能
+                try:
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as temp_file:
+                        json.dump(service_account_info, temp_file)
+                        temp_file_path = temp_file.name
+                    
+                    print(f"DEBUG: Wrote credentials to temp file: {temp_file_path}", flush=True)
+                    
+                    credentials = ServiceAccountCredentials.from_json_keyfile_name(
+                        temp_file_path, SCOPES
+                    )
+                    
+                    # 使用後は消すのが理想だが、プロセス中で再利用されるなら消さない方が無難か
+                    # Security warning: temp file persists until container restart
+                    # os.unlink(temp_file_path) 
+                    
+                except Exception as file_error:
+                    print(f"ERROR: Failed to create temp credential file: {file_error}", flush=True)
+                    # フォールバック
+                    credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+                        service_account_info, SCOPES
+                    )
+
                 self.client = gspread.authorize(credentials)
-                print("Google Sheets client initialized successfully (oauth2client)", flush=True)
+                print("Google Sheets client initialized successfully (oauth2client + file-based)", flush=True)
                 return
 
             except Exception as e:
