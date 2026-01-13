@@ -89,12 +89,17 @@ class SheetsService:
     
     def _load_mappings(self):
         """マッピングファイルを読み込み"""
+        print(f"DEBUG: Looking for mapping file at: {MAPPING_FILE}", flush=True)
+        print(f"DEBUG: MAPPING_FILE exists: {MAPPING_FILE.exists()}", flush=True)
         if MAPPING_FILE.exists():
             try:
                 mapping_text = MAPPING_FILE.read_text(encoding='utf-8')
                 self.mapping_dict = self._parse_mapping(mapping_text)
+                print(f"DEBUG: Loaded mapping.txt with {len(self.mapping_dict)} keys", flush=True)
             except Exception as e:
-                print(f"Failed to load mapping.txt: {e}")
+                print(f"Failed to load mapping.txt: {e}", flush=True)
+        else:
+            print("DEBUG: mapping.txt NOT FOUND", flush=True)
         
         if MAPPING2_FILE.exists():
             try:
