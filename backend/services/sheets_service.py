@@ -382,7 +382,7 @@ class SheetsService:
             print(f"DEBUG: First 5 cells: {cells_to_update[:5]}", flush=True)
             for cell_data in cells_to_update:
                 try:
-                    worksheet.update(cell_data["cell"], cell_data["value"])
+                    worksheet.update_acell(cell_data["cell"], cell_data["value"])
                     print(f"DEBUG: Updated cell {cell_data['cell']}", flush=True)
                 except Exception as e:
                     print(f"Failed to update cell {cell_data['cell']}: {e}", flush=True)
