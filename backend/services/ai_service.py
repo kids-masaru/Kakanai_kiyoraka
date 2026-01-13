@@ -65,6 +65,15 @@ class AIService:
             text = text.split("```")[1].split("```")[0].strip()
         return text
     
+    def _parse_json_result(self, text: str) -> Dict[str, Any]:
+        """JSONをパースし、リストの場合は最初の要素を返す"""
+        cleaned = self._clean_json_response(text)
+        result = json.loads(cleaned)
+        # Geminiがリストで返すことがあるので、最初の要素を取り出す
+        if isinstance(result, list) and len(result) > 0:
+            return result[0]
+        return result
+    
     def extract_assessment_from_audio(self, audio_data: bytes) -> Dict[str, Any]:
         """音声データからアセスメント情報を抽出"""
         # 一時ファイルに保存してからアップロード
@@ -121,8 +130,7 @@ class AIService:
 }
 """
             response = self._generate_with_retry([uploaded_file, prompt])
-            text = self._clean_json_response(response.text)
-            return json.loads(text)
+            return self._parse_json_result(response.text)
         finally:
             # クリーンアップ
             if uploaded_file:
@@ -169,8 +177,7 @@ class AIService:
 }
 """
             response = self._generate_with_retry([uploaded_file, prompt])
-            text = self._clean_json_response(response.text)
-            return json.loads(text)
+            return self._parse_json_result(response.text)
         finally:
             if uploaded_file:
                 try:
@@ -209,8 +216,7 @@ class AIService:
 }
 """
             response = self._generate_with_retry([uploaded_file, prompt])
-            text = self._clean_json_response(response.text)
-            return json.loads(text)
+            return self._parse_json_result(response.text)
         finally:
             if uploaded_file:
                 try:
