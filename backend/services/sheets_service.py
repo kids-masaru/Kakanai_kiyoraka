@@ -2,7 +2,7 @@
 Sheets Service - Google Sheets統合（マッピング対応版）
 """
 import gspread
-from google.oauth2.service_account import Credentials
+from oauth2client.service_account import ServiceAccountCredentials
 import os
 import json
 import re
@@ -25,8 +25,8 @@ class SheetsService:
     
     def _initialize_client(self):
         """Google Sheets APIクライアントを初期化"""
-        scopes = [
-            'https://www.googleapis.com/auth/spreadsheets',
+        scope = [
+            'https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive'
         ]
         
@@ -36,8 +36,8 @@ class SheetsService:
         if service_account_json:
             try:
                 service_account_info = json.loads(service_account_json)
-                credentials = Credentials.from_service_account_info(
-                    service_account_info, scopes=scopes
+                credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+                    service_account_info, scope
                 )
                 self.client = gspread.authorize(credentials)
             except Exception as e:
