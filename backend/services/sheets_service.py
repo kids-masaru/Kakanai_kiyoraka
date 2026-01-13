@@ -37,9 +37,15 @@ class SheetsService:
         
         if service_account_base64:
             try:
-                # Base64をデコードしてJSONに変換
+                # Base64をデコードしてJSONに変換（余分な空白を削除）
+                service_account_base64 = service_account_base64.strip()
                 decoded_bytes = base64.b64decode(service_account_base64)
                 service_account_info = json.loads(decoded_bytes.decode('utf-8'))
+                
+                # private_keyの検証用ログ
+                pk = service_account_info.get("private_key", "")
+                print(f"DEBUG: private_key starts with: {repr(pk[:50])}", flush=True)
+                print(f"DEBUG: private_key ends with: {repr(pk[-50:])}", flush=True)
                 
                 credentials = ServiceAccountCredentials.from_json_keyfile_dict(
                     service_account_info, scope
@@ -48,7 +54,7 @@ class SheetsService:
                 print("Google Sheets client initialized from Base64 environment variable")
                 return
             except Exception as e:
-                print(f"Failed to initialize from Base64 env var: {e}")
+                print(f"Failed to initialize from Base64 env var: {e}", flush=True)
         
         # 2. ファイルから認証（ローカル開発用）
         service_account_file = CONFIG_DIR / "service_account.json"
@@ -200,8 +206,12 @@ class SheetsService:
             raise ValueError(f"Mapping not loaded for type: {mapping_type}")
         
         print(f"DEBUG: Opening spreadsheet...", flush=True)
-        spreadsheet = self.client.open_by_key(spreadsheet_id)
-        print(f"DEBUG: Spreadsheet opened successfully", flush=True)
+        try:
+            spreadsheet = self.client.open_by_key(spreadsheet_id)
+            print(f"DEBUG: Spreadsheet opened successfully", flush=True)
+        except Exception as e:
+            print(f"ERROR: Failed to open spreadsheet: {type(e).__name__}: {e}", flush=True)
+            raise
         
         # シート名が指定されていない場合は最初のシートを使用
         if sheet_name:
