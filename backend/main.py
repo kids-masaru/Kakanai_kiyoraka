@@ -170,6 +170,30 @@ async def analyze_pdf(file: UploadFile = File(...)):
         return AnalyzeResponse(success=False, error=str(e))
 
 
+@app.post("/api/analyze/image", response_model=AnalyzeResponse)
+async def analyze_image(file: UploadFile = File(...)):
+    """
+    画像ファイル（JPEG/PNG）分析
+    """
+    try:
+        content = await file.read()
+        # content_typeがない場合はファイル名から推測
+        mime_type = file.content_type
+        if not mime_type or mime_type == "application/octet-stream":
+            filename = file.filename.lower() if file.filename else ""
+            if filename.endswith(".jpg") or filename.endswith(".jpeg"):
+                mime_type = "image/jpeg"
+            elif filename.endswith(".png"):
+                mime_type = "image/png"
+            else:
+                mime_type = "image/jpeg"  # デフォルト
+        
+        result = ai_service.extract_from_image(content, mime_type)
+        return AnalyzeResponse(success=True, data=result)
+    except Exception as e:
+        return AnalyzeResponse(success=False, error=str(e))
+
+
 @app.post("/api/sheets/write", response_model=AnalyzeResponse)
 async def write_to_sheets(request: SheetsWriteRequest):
     """

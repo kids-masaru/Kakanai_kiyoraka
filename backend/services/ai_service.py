@@ -284,6 +284,66 @@ JSON形式で出力してください。
             except:
                 pass
     
+    def extract_from_image(self, image_data: bytes, mime_type: str) -> Dict[str, Any]:
+        """画像（JPEG/PNG）から情報を抽出"""
+        print(f"DEBUG: extract_from_image called with mime_type={mime_type}", flush=True)
+        
+        uploaded_file = genai.upload_file(
+            io.BytesIO(image_data),
+            mime_type=mime_type
+        )
+        
+        while uploaded_file.state.name == "PROCESSING":
+            time.sleep(1)
+            uploaded_file = genai.get_file(uploaded_file.name)
+        
+        prompt = """
+あなたは、ベテランの認定調査員であり、ケアマネージャーです。
+提供された画像データ（書類の写真、アセスメントシート等）を注意深く読み取り、
+「アセスメントシート（基本情報、課題分析、認定調査票）」を作成するために必要な情報を抽出してください。
+
+出力は以下のJSON形式のみで行ってください。
+
+## 抽出方針
+- 画像内のテキスト、手書き文字、表形式のデータを読み取る
+- 不明な項目は \"（空白）\" とする
+
+## 出力JSONフォーマット
+{
+  "基本情報": {
+    "氏名": "", "性別": "", "生年月日": "", "年齢": "", "住所": "", "電話番号": ""
+  },
+  "利用者情報": {
+     "既往歴": "", "主訴": "", "家族構成": "", "キーパーソン": ""
+  },
+  "認定調査項目": {
+    "身体機能": "（麻痺、拘縮、寝返り、歩行などの状況）",
+    "生活機能": "（食事、排泄、入浴、着脱、移動などの介助量）",
+    "認知機能": "（意思疎通、短期記憶、徘徊、生年月日等の認識）",
+    "精神・行動障害": "（感情不安定、暴言、暴力、拒絶など）",
+    "社会生活": "（服薬管理、金銭管理、買い物、調理など）"
+  },
+  "アセスメント情報": {
+    "相談の経緯": "",
+    "本人・家族の意向": "",
+    "生活状況": "（起床就寝、日中の過ごし方、外出頻度など）",
+    "住環境": "（段差、手すり、住宅改修の必要性など）",
+    "他サービス利用状況": ""
+  },
+  "主治医・医療": {
+    "主治医": "", "医療機関": "", "特別な医療処置": ""
+  }
+}
+"""
+        try:
+            response = self._generate_with_retry([uploaded_file, prompt])
+            return self._parse_json_result(response.text)
+        finally:
+            try:
+                genai.delete_file(uploaded_file.name)
+            except:
+                pass
+    
     def generate_genogram_data(self, text: str) -> Dict[str, Any]:
         """テキストからジェノグラムデータを生成"""
         prompt = f"""

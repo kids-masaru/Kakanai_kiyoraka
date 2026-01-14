@@ -118,6 +118,21 @@ export async function analyzePdf(file: File): Promise<AnalyzeResponse> {
 }
 
 /**
+ * Analyze image file (JPEG/PNG)
+ */
+export async function analyzeImage(file: File): Promise<AnalyzeResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/api/analyze/image`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    return response.json();
+}
+
+/**
  * Write data to Google Sheets
  */
 export async function writeToSheets(

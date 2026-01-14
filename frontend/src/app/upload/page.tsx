@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { getPresignedUrl, uploadToR2, analyzeAudio, analyzePdf } from "@/lib/api";
+import { getPresignedUrl, uploadToR2, analyzeAudio, analyzePdf, analyzeImage } from "@/lib/api";
 
 type AnalysisType = "assessment" | "meeting" | "qa";
 
@@ -42,6 +42,11 @@ export default function UploadPage() {
 
             const isPdf = file.type === "application/pdf" ||
                 file.name.toLowerCase().endsWith(".pdf");
+
+            const isImage = file.type.startsWith("image/") ||
+                file.name.toLowerCase().endsWith(".jpg") ||
+                file.name.toLowerCase().endsWith(".jpeg") ||
+                file.name.toLowerCase().endsWith(".png");
 
             if (isAudio) {
                 // Audio: Use R2 presigned URL upload
@@ -111,6 +116,32 @@ export default function UploadPage() {
                 } else {
                     throw new Error(result.error || "分析に失敗しました");
                 }
+            } else if (isImage) {
+                // Image: Direct upload to backend
+                setUploadState({
+                    status: "uploading",
+                    progress: 30,
+                    message: "画像をアップロード中...",
+                });
+
+                setUploadState({
+                    status: "analyzing",
+                    progress: 60,
+                    message: "AI分析中...",
+                });
+
+                const result = await analyzeImage(file);
+
+                if (result.success) {
+                    setUploadState({
+                        status: "complete",
+                        progress: 100,
+                        message: "分析完了！",
+                        result: result.data,
+                    });
+                } else {
+                    throw new Error(result.error || "分析に失敗しました");
+                }
             } else {
                 throw new Error("サポートされていないファイル形式です");
             }
@@ -158,8 +189,8 @@ export default function UploadPage() {
                             <button
                                 onClick={() => setAnalysisType("assessment")}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === "assessment"
-                                        ? "bg-blue-500 text-white"
-                                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                    ? "bg-blue-500 text-white"
+                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                                     }`}
                             >
                                 📝 アセスメント
@@ -167,8 +198,8 @@ export default function UploadPage() {
                             <button
                                 onClick={() => setAnalysisType("meeting")}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === "meeting"
-                                        ? "bg-purple-500 text-white"
-                                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                    ? "bg-purple-500 text-white"
+                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                                     }`}
                             >
                                 📅 会議録
@@ -176,8 +207,8 @@ export default function UploadPage() {
                             <button
                                 onClick={() => setAnalysisType("qa")}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === "qa"
-                                        ? "bg-green-500 text-white"
-                                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                    ? "bg-green-500 text-white"
+                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                                     }`}
                             >
                                 ❓ Q&A抽出
@@ -193,7 +224,7 @@ export default function UploadPage() {
                         <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors">
                             <input
                                 type="file"
-                                accept="audio/*,.m4a,.mp3,.wav,.pdf"
+                                accept="audio/*,.m4a,.mp3,.wav,.pdf,image/*,.jpg,.jpeg,.png"
                                 onChange={handleFileChange}
                                 className="hidden"
                                 id="file-input"
@@ -207,14 +238,14 @@ export default function UploadPage() {
                                     クリックしてファイルを選択
                                 </p>
                                 <p className="text-gray-400 text-sm">
-                                    対応形式: M4A, MP3, WAV, PDF
+                                    対応形式: M4A, MP3, WAV, PDF, JPEG, PNG
                                 </p>
                             </label>
                         </div>
                         {file && (
                             <div className="mt-3 p-3 bg-blue-50 rounded-lg flex items-center gap-3">
                                 <span className="text-2xl">
-                                    {file.type.startsWith("audio/") ? "🎵" : "📄"}
+                                    {file.type.startsWith("audio/") ? "🎵" : file.type.startsWith("image/") ? "🖼️" : "📄"}
                                 </span>
                                 <div>
                                     <p className="font-medium text-gray-900">{file.name}</p>
