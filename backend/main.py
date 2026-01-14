@@ -145,6 +145,10 @@ async def analyze_audio(request: AnalyzeAudioRequest):
         # 分析タイプに応じて処理
         if request.analysis_type == "assessment":
             result = ai_service.extract_assessment_from_audio(audio_data)
+        elif request.analysis_type == "management_meeting":
+            result = ai_service.generate_management_meeting_summary(audio_data)
+        elif request.analysis_type == "service_meeting":
+            result = ai_service.generate_service_meeting_summary(audio_data)
         elif request.analysis_type == "meeting":
             result = ai_service.generate_meeting_summary(audio_data)
         elif request.analysis_type == "qa":
