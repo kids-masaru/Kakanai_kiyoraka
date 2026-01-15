@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { uploadFileDirect, analyzeAudio, writeToSheets } from "@/lib/api";
+import { analyzeAudioDirect, writeToSheets } from "@/lib/api";
 
 type DocumentType = "assessment" | "service_meeting" | "management_meeting";
 
@@ -192,13 +192,14 @@ export default function Home() {
     if (!file) return;
     try {
       setUploadState({ status: "uploading", progress: 20, message: "アップロード中..." });
-      const uploadResult = await uploadFileDirect(file);
-      if (!uploadResult.success) {
-        throw new Error("アップロードに失敗しました");
-      }
-      setUploadState({ status: "analyzing", progress: 60, message: "AI分析中..." });
-      const analysisType = selectedType === "assessment" ? "assessment" : "meeting";
-      const result = await analyzeAudio(uploadResult.file_key, analysisType);
+
+      setUploadState({ status: "analyzing", progress: 50, message: "AI分析中...（大きなファイルは時間がかかります）" });
+
+      // 直接アップロードして分析（R2を経由しない）
+      const analysisType = selectedType === "assessment" ? "assessment" :
+        selectedType === "management_meeting" ? "management_meeting" : "service_meeting";
+      const result = await analyzeAudioDirect(file, analysisType);
+
       if (result.success) {
         setUploadState({ status: "complete", progress: 100, message: "分析完了！", result: { ...result.data, formInput: getFormData(), spreadsheetId: getCurrentSpreadsheetId() } });
       } else {
