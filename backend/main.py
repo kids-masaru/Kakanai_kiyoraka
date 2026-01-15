@@ -122,14 +122,29 @@ async def upload_file_direct(file: UploadFile = File(...)):
     バックエンド経由でR2にアップロード（CORSバイパス）
     """
     try:
+        print(f"DEBUG: upload_file_direct called with filename={file.filename}", flush=True)
+        
+        # R2設定の確認
+        if not storage_service.s3_client:
+            print("ERROR: R2 credentials not configured!", flush=True)
+            raise HTTPException(status_code=500, detail="R2 credentials not configured. Please set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY environment variables.")
+        
         content = await file.read()
+        print(f"DEBUG: File size: {len(content)} bytes", flush=True)
+        
         file_key = storage_service.upload_file(
             file_data=content,
             filename=file.filename,
             content_type=file.content_type or "application/octet-stream"
         )
+        print(f"DEBUG: File uploaded successfully with key: {file_key}", flush=True)
         return {"success": True, "file_key": file_key}
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"ERROR: upload_file_direct failed: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
