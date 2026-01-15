@@ -176,6 +176,45 @@ async def analyze_audio(request: AnalyzeAudioRequest):
         return AnalyzeResponse(success=False, error=str(e))
 
 
+@app.post("/api/analyze/audio/direct", response_model=AnalyzeResponse)
+async def analyze_audio_direct(
+    file: UploadFile = File(...),
+    analysis_type: str = Form("assessment")
+):
+    """
+    音声ファイル直接分析（R2を経由せず直接処理）
+    care-dx-appと同じ方式
+    """
+    try:
+        print(f"DEBUG: analyze_audio_direct called with filename={file.filename}, type={analysis_type}", flush=True)
+        
+        # ファイルを読み込み
+        content = await file.read()
+        print(f"DEBUG: File size: {len(content)} bytes", flush=True)
+        
+        # 分析タイプに応じて処理
+        if analysis_type == "assessment":
+            result = ai_service.extract_assessment_from_audio(content)
+        elif analysis_type == "management_meeting":
+            result = ai_service.generate_management_meeting_summary(content)
+        elif analysis_type == "service_meeting":
+            result = ai_service.generate_service_meeting_summary(content)
+        elif analysis_type == "meeting":
+            result = ai_service.generate_meeting_summary(content)
+        elif analysis_type == "qa":
+            result = ai_service.extract_qa_from_audio(content)
+        else:
+            raise ValueError(f"Unknown analysis type: {analysis_type}")
+        
+        print(f"DEBUG: Analysis complete for type={analysis_type}", flush=True)
+        return AnalyzeResponse(success=True, data=result)
+    except Exception as e:
+        print(f"ERROR: analyze_audio_direct failed: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return AnalyzeResponse(success=False, error=str(e))
+
+
 @app.post("/api/analyze/pdf", response_model=AnalyzeResponse)
 async def analyze_pdf(file: UploadFile = File(...)):
     """

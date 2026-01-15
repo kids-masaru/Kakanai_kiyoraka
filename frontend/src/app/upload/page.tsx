@@ -2,9 +2,9 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { getPresignedUrl, uploadToR2, analyzeAudio, analyzePdf, analyzeImage } from "@/lib/api";
+import { analyzeAudioDirect, analyzePdf, analyzeImage } from "@/lib/api";
 
-type AnalysisType = "assessment" | "meeting" | "qa";
+type AnalysisType = "assessment" | "meeting" | "management_meeting" | "service_meeting" | "qa";
 
 interface UploadState {
     status: "idle" | "uploading" | "analyzing" | "complete" | "error";
@@ -48,37 +48,23 @@ export default function UploadPage() {
                 file.name.toLowerCase().endsWith(".jpeg") ||
                 file.name.toLowerCase().endsWith(".png");
 
+
             if (isAudio) {
-                // Audio: Use R2 presigned URL upload
+                // Audio: Direct upload to backend (no R2)
                 setUploadState({
                     status: "uploading",
-                    progress: 10,
-                    message: "署名付きURLを取得中...",
+                    progress: 20,
+                    message: "音声ファイルをアップロード中...",
                 });
-
-                // Get presigned URL
-                const { upload_url, file_key } = await getPresignedUrl(
-                    file.name,
-                    file.type || "audio/mp4"
-                );
-
-                setUploadState({
-                    status: "uploading",
-                    progress: 30,
-                    message: "R2にアップロード中...",
-                });
-
-                // Upload directly to R2
-                await uploadToR2(upload_url, file);
 
                 setUploadState({
                     status: "analyzing",
-                    progress: 60,
-                    message: "AI分析中...",
+                    progress: 50,
+                    message: "AI分析中...（大きなファイルは時間がかかります）",
                 });
 
-                // Analyze the uploaded file
-                const result = await analyzeAudio(file_key, analysisType);
+                // Direct upload and analyze
+                const result = await analyzeAudioDirect(file, analysisType);
 
                 if (result.success) {
                     setUploadState({
@@ -196,13 +182,22 @@ export default function UploadPage() {
                                 📝 アセスメント
                             </button>
                             <button
-                                onClick={() => setAnalysisType("meeting")}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === "meeting"
+                                onClick={() => setAnalysisType("service_meeting")}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === "service_meeting"
                                     ? "bg-purple-500 text-white"
                                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                                     }`}
                             >
-                                📅 会議録
+                                🤝 サービス担当者会議
+                            </button>
+                            <button
+                                onClick={() => setAnalysisType("management_meeting")}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === "management_meeting"
+                                    ? "bg-orange-500 text-white"
+                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                    }`}
+                            >
+                                🏢 運営会議
                             </button>
                             <button
                                 onClick={() => setAnalysisType("qa")}
