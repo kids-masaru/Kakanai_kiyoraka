@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import Link from "next/link";
 import { analyzeAudioDirect, analyzePdf, analyzeImage } from "@/lib/api";
 
-type AnalysisType = "assessment" | "meeting" | "management_meeting" | "service_meeting" | "qa";
+type AnalysisType = "assessment" | "management_meeting" | "service_meeting";
 
 interface UploadState {
     status: "idle" | "uploading" | "analyzing" | "complete" | "error";
@@ -198,15 +198,6 @@ export default function UploadPage() {
                                     }`}
                             >
                                 🏢 運営会議
-                            </button>
-                            <button
-                                onClick={() => setAnalysisType("qa")}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === "qa"
-                                    ? "bg-green-500 text-white"
-                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                                    }`}
-                            >
-                                ❓ Q&A抽出
                             </button>
                         </div>
                     </div>
