@@ -94,13 +94,21 @@ const UploadIcon = () => (
 
 export default function Home() {
   const [selectedType, setSelectedType] = useState<DocumentType>("assessment");
-  const [file, setFile] = useState<File | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [uploadState, setUploadState] = useState<UploadState>({
-    status: "idle",
-    progress: 0,
-    message: "",
-  });
+
+  // Multi-file state
+  type FileStatus = "waiting" | "analyzing" | "writing" | "complete" | "error";
+
+  interface FileItem {
+    id: string;
+    file: File;
+    status: FileStatus;
+    message: string;
+    resultUrl?: string;
+  }
+
+  const [files, setFiles] = useState<FileItem[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
 
@@ -132,12 +140,23 @@ export default function Home() {
     開催回数: "第1回",
   });
 
+  // Helper to add files
+  const addFiles = (newFiles: File[]) => {
+    const newItems: FileItem[] = newFiles.map(f => ({
+      id: Math.random().toString(36).substr(2, 9),
+      file: f,
+      status: "waiting",
+      message: "待機中"
+    }));
+    setFiles(prev => [...prev, ...newItems]);
+  };
+
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      setUploadState({ status: "idle", progress: 0, message: "" });
+    if (e.target.files) {
+      addFiles(Array.from(e.target.files));
     }
+    // file input reset is irrelevant as we append
+    e.target.value = "";
   }, []);
 
   // Drag and Drop handlers
@@ -165,18 +184,24 @@ export default function Home() {
     e.stopPropagation();
     setIsDragging(false);
 
-    const droppedFile = e.dataTransfer.files?.[0];
-    if (droppedFile) {
-      // 許容するファイルタイプ: Audio, PDF, Image
-      const type = droppedFile.type;
-      if (type.startsWith('audio/') || type === 'application/pdf' || type.startsWith('image/')) {
-        setFile(droppedFile);
-        setUploadState({ status: "idle", progress: 0, message: "" });
-      } else {
-        alert("対応していないファイル形式です。(音声, PDF, 画像のみ対応)");
-      }
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    const validFiles = droppedFiles.filter(f => {
+      const type = f.type;
+      return type.startsWith('audio/') || type === 'application/pdf' || type.startsWith('image/');
+    });
+
+    if (validFiles.length > 0) {
+      addFiles(validFiles);
+    }
+
+    if (droppedFiles.length !== validFiles.length) {
+      alert("一部のファイルは対応していない形式のためスキップされました。(音声, PDF, 画像のみ対応)");
     }
   }, []);
+
+  const removeFile = (id: string) => {
+    setFiles(prev => prev.filter(f => f.id !== id));
+  };
 
   const getFormData = () => {
     switch (selectedType) {
@@ -188,91 +213,97 @@ export default function Home() {
 
   const getCurrentSpreadsheetId = () => {
     switch (selectedType) {
-      case "assessment": return settings.assessmentSheetId; // Note: For 'create' mode, this might be ignored generally, but passed anyway
+      case "assessment": return settings.assessmentSheetId;
       case "service_meeting": return settings.serviceMeetingSheetId;
       case "management_meeting": return settings.managementMeetingSheetId;
     }
   };
 
-  const handleUpload = async () => {
-    if (!file) return;
-    try {
-      setUploadState({ status: "uploading", progress: 20, message: "アップロード中..." });
-
-      setUploadState({ status: "analyzing", progress: 50, message: "AI分析中...（大きなファイルは時間がかかります）" });
-
-      // 分析タイプを決定
-      const analysisType = selectedType === "assessment" ? "assessment" :
-        selectedType === "management_meeting" ? "management_meeting" : "service_meeting";
-
-      // ユニバーサルアップロードAPIを使用
-      const result = await analyzeAudioDirect(file, analysisType);
-
-      if (result.success) {
-        setUploadState({ status: "complete", progress: 100, message: "分析完了！", result: { ...result.data, formInput: getFormData(), spreadsheetId: getCurrentSpreadsheetId() } });
-      } else {
-        throw new Error(result.error || "分析に失敗しました");
-      }
-    } catch (error) {
-      setUploadState({ status: "error", progress: 0, message: error instanceof Error ? error.message : "エラーが発生しました" });
-    }
+  const updateFileStatus = (id: string, updates: Partial<FileItem>) => {
+    setFiles(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
   };
 
-  const resetUpload = () => {
-    setFile(null);
-    setUploadState({ status: "idle", progress: 0, message: "" });
-  };
+  const processQueue = async () => {
+    if (files.length === 0) return;
+    setIsProcessing(true);
 
-  const handleWrite = async () => {
-    try {
-      setUploadState(prev => ({ ...prev, message: "スプレッドシートに書き込み中..." }));
+    // Wait 1s just for UX
+    await new Promise(r => setTimeout(r, 500));
 
-      let writeMode: 'mapping' | 'append' | 'create' = 'mapping';
-      let meetingType = "";
+    // Process files sequentially
+    for (const fileItem of files) {
+      if (fileItem.status === "complete" || fileItem.status === "writing") continue; // Skip already done
 
-      if (selectedType === "assessment") {
-        writeMode = "create"; // アセスメントは新規シート作成
-      } else if (selectedType === "management_meeting") {
-        writeMode = "append";
-        meetingType = "management_meeting";
-      } else if (selectedType === "service_meeting") {
-        writeMode = "append";
-        meetingType = "service_meeting";
-      }
+      try {
+        // 1. Analyze
+        updateFileStatus(fileItem.id, { status: "analyzing", message: "AI分析中..." });
 
-      // 追記データ用
-      const meetingDate = selectedType === "management_meeting" ? managementForm.開催日 : serviceForm.開催日;
-      const meetingTime = selectedType === "management_meeting" ? `${managementForm.開始時間}~${managementForm.終了時間}` : `${serviceForm.開始時間}~${serviceForm.終了時間}`;
-      const meetingPlace = selectedType === "management_meeting" ? managementForm.開催場所 : serviceForm.開催場所;
-      const meetingParticipants = selectedType === "management_meeting" ? managementForm.参加者 : serviceForm.担当者名; // サービス会議は担当者名を使用
+        const analysisType = selectedType === "assessment" ? "assessment" :
+          selectedType === "management_meeting" ? "management_meeting" : "service_meeting";
 
-      const result = await writeToSheets(
-        getCurrentSpreadsheetId(),
-        "",  // 空の場合はデフォルト
-        (uploadState.result || {}) as Record<string, unknown>,
-        "assessment", // mappingType (ignored for append/create mostly)
-        writeMode,
-        meetingType,
-        meetingDate,
-        meetingTime,
-        meetingPlace,
-        meetingParticipants
-      );
+        const analyzeResult = await analyzeAudioDirect(fileItem.file, analysisType);
 
-      if (result.success) {
-        let msg = `✅ 書き込み完了（${result.data?.written_cells || 1}件）`;
-        if (result.data?.sheet_url) {
-          msg += ` URL: ${result.data.sheet_url}`;
-          // URLを新しいタブで開く
-          window.open(result.data.sheet_url as string, '_blank');
+        if (!analyzeResult.success) {
+          throw new Error(analyzeResult.error || "分析失敗");
         }
-        setUploadState(prev => ({ ...prev, status: "complete", message: msg }));
-      } else {
-        throw new Error(result.error || "書き込みに失敗しました");
+
+        // 2. Write
+        updateFileStatus(fileItem.id, { status: "writing", message: "シート書き込み中..." });
+
+        // Prepare write data
+        let writeMode: 'mapping' | 'append' | 'create' = 'mapping';
+        let meetingType = "";
+
+        if (selectedType === "assessment") {
+          writeMode = "create";
+        } else if (selectedType === "management_meeting") {
+          writeMode = "append";
+          meetingType = "management_meeting";
+        } else if (selectedType === "service_meeting") {
+          writeMode = "append";
+          meetingType = "service_meeting";
+        }
+
+        const meetingDate = selectedType === "management_meeting" ? managementForm.開催日 : serviceForm.開催日;
+        const meetingTime = selectedType === "management_meeting" ? `${managementForm.開始時間}~${managementForm.終了時間}` : `${serviceForm.開始時間}~${serviceForm.終了時間}`;
+        const meetingPlace = selectedType === "management_meeting" ? managementForm.開催場所 : serviceForm.開催場所;
+        // Assessment has no participants field in this context, use form data if needed or extracted
+        let meetingParticipants = "";
+        if (selectedType === "management_meeting") meetingParticipants = managementForm.参加者;
+        if (selectedType === "service_meeting") meetingParticipants = serviceForm.担当者名;
+
+        const writeResult = await writeToSheets(
+          getCurrentSpreadsheetId(),
+          "",
+          (analyzeResult.data || {}) as Record<string, unknown>,
+          "assessment",
+          writeMode,
+          meetingType,
+          meetingDate,
+          meetingTime,
+          meetingPlace,
+          meetingParticipants
+        );
+
+        if (writeResult.success) {
+          updateFileStatus(fileItem.id, {
+            status: "complete",
+            message: "完了",
+            resultUrl: writeResult.data?.sheet_url as string
+          });
+        } else {
+          throw new Error(writeResult.error || "書き込み失敗");
+        }
+
+      } catch (error) {
+        updateFileStatus(fileItem.id, {
+          status: "error",
+          message: error instanceof Error ? error.message : "エラー"
+        });
       }
-    } catch (error) {
-      setUploadState(prev => ({ ...prev, message: `❌ 書き込みエラー: ${error instanceof Error ? error.message : '不明なエラー'}` }));
     }
+
+    setIsProcessing(false);
   };
 
   const renderFormByType = () => {
@@ -449,7 +480,7 @@ export default function Home() {
 
         {/* Main */}
         <main className="max-w-5xl mx-auto px-4 py-4">
-          {/* Document Type Selection - Compact, no checkmark */}
+          {/* Document Type Selection */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 mb-4">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-gray-700 mr-2">作成:</span>
@@ -476,74 +507,92 @@ export default function Home() {
 
           {/* Upload Section */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">ファイル分析（音声・PDF・画像）</h3>
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">ファイル分析（音声・PDF・画像）- 複数選択可</h3>
 
             <div
-              className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors mb-3 ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
+              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors mb-3 ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
               onDragOver={handleDragOver}
               onDragEnter={handleDragEnter}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <input type="file" accept="audio/*,.m4a,.mp3,.wav,application/pdf,image/*,.jpg,.jpeg,.png" onChange={handleFileChange} className="hidden" id="file-input" />
+              <input type="file" multiple accept="audio/*,.m4a,.mp3,.wav,application/pdf,image/*,.jpg,.jpeg,.png" onChange={handleFileChange} className="hidden" id="file-input" />
               <label htmlFor="file-input" className="cursor-pointer flex flex-col items-center">
                 <UploadIcon />
-                <p className="text-sm text-gray-500 mt-2">{isDragging ? 'ここにドロップ' : 'クリックまたはドラッグ&ドロップ'}</p>
-                <p className="text-xs text-gray-400">音声(m4a/mp3), PDF, 画像(jpg/png) に対応</p>
+                <p className="text-sm text-gray-500 mt-2">{isDragging ? 'ここにドロップして追加' : 'クリックまたはドラッグ&ドロップでファイルを追加'}</p>
+                <p className="text-xs text-gray-400">複数選択可能 / 音声(m4a/mp3), PDF, 画像</p>
               </label>
             </div>
 
-            {file && (
-              <div className="p-2 bg-blue-50 rounded-lg flex items-center gap-2 mb-3 text-sm">
-                <span className="text-blue-600">●</span>
-                <span className="flex-1 truncate">{file.name}</span>
-                <span className="text-gray-500">{(file.size / 1024 / 1024).toFixed(1)}MB</span>
-                <button onClick={resetUpload} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
-              </div>
-            )}
+            {/* File List */}
+            {files.length > 0 && (
+              <div className="space-y-2 mb-4">
+                {files.map(f => (
+                  <div key={f.id} className="p-3 bg-gray-50 rounded-lg flex items-center gap-3 border border-gray-100">
+                    {/* Status Icon */}
+                    <div className="flex-shrink-0">
+                      {f.status === "waiting" && <span className="text-gray-400">🕒</span>}
+                      {f.status === "analyzing" && <span className="text-blue-500 animate-pulse">🤖</span>}
+                      {f.status === "writing" && <span className="text-green-500 animate-pulse">📝</span>}
+                      {f.status === "complete" && <span className="text-green-600">✅</span>}
+                      {f.status === "error" && <span className="text-red-500">❌</span>}
+                    </div>
 
-            <button
-              onClick={handleUpload}
-              disabled={!file || uploadState.status === "uploading" || uploadState.status === "analyzing"}
-              className="w-full py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {uploadState.status === "uploading" || uploadState.status === "analyzing"
-                ? uploadState.message
-                : `${documentTypes.find(t => t.value === selectedType)?.label}を作成`}
-            </button>
+                    {/* File Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-gray-700 truncate">{f.file.name}</p>
+                        <p className="text-xs text-gray-500">{(f.file.size / 1024 / 1024).toFixed(2)}MB</p>
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className={`text-xs ${f.status === "error" ? "text-red-600" :
+                            f.status === "complete" ? "text-green-600" : "text-gray-500"
+                          }`}>{f.message}</p>
+                        {f.resultUrl && (
+                          <a href={f.resultUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                            シートを開く ↗
+                          </a>
+                        )}
+                      </div>
+                    </div>
 
-            {(uploadState.status === "uploading" || uploadState.status === "analyzing") && (
-              <div className="mt-3">
-                <div className="w-full bg-gray-200 rounded-full h-1.5">
-                  <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-300" style={{ width: `${uploadState.progress}%` }} />
-                </div>
-              </div>
-            )}
-
-            {uploadState.status === "error" && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{uploadState.message}</div>
-            )}
-
-            {uploadState.status === "complete" && uploadState.result && (
-              <div className="mt-4">
-                <h4 className="text-sm font-medium text-gray-800 mb-2">分析結果</h4>
-                <div className="bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto mb-3">
-                  <pre className="text-xs text-gray-700 whitespace-pre-wrap">{JSON.stringify(uploadState.result, null, 2)}</pre>
-                </div>
-                <button
-                  onClick={handleWrite}
-                  className="w-full py-3 bg-green-500 text-white font-medium rounded-lg hover:bg-green-600 transition-all mb-2"
-                >
-                  📊 スプレッドシートに書き込み
-                </button>
-                {uploadState.message && uploadState.message.includes("書き込み") && (
-                  <div className={`p-2 rounded-lg text-sm ${uploadState.message.includes("✅") ? "bg-green-50 text-green-700" : uploadState.message.includes("❌") ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}>
-                    {uploadState.message}
+                    {/* Remove Button (only if not processing) */}
+                    <button
+                      onClick={() => removeFile(f.id)}
+                      disabled={f.status === "analyzing" || f.status === "writing"}
+                      className="text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:hover:text-gray-400"
+                    >
+                      &times;
+                    </button>
                   </div>
-                )}
-                <button onClick={resetUpload} className="mt-3 w-full py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">別のファイルを分析</button>
+                ))}
               </div>
             )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setFiles([])}
+                disabled={isProcessing || files.length === 0}
+                className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+              >
+                クリア
+              </button>
+              <button
+                onClick={processQueue}
+                disabled={isProcessing || files.length === 0}
+                className="flex-1 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+              >
+                {isProcessing ? "実行中..." : `選択した${files.length}件を${documentTypes.find(t => t.value === selectedType)?.label}として作成`}
+              </button>
+            </div>
+
+            {isProcessing && (
+              <p className="text-center text-xs text-gray-500 mt-2">
+                ※ 順番に処理しています。ブラウザを閉じないでください。
+              </p>
+            )}
+
           </div>
         </main>
       </div>
