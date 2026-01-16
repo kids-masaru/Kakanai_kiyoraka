@@ -103,15 +103,17 @@ export async function analyzeAudio(
 }
 
 /**
- * Analyze audio file directly (without R2)
+ * Analyze audio/files directly (without R2) - supports MULTIPLE files
  * This is the preferred method - matches care-dx-app
  */
 export async function analyzeAudioDirect(
-    file: File,
+    files: File[],
     analysisType: 'assessment' | 'meeting' | 'management_meeting' | 'service_meeting' | 'qa' = 'assessment'
 ): Promise<AnalyzeResponse> {
     const formData = new FormData();
-    formData.append('file', file);
+    files.forEach(file => {
+        formData.append('files', file);
+    });
     formData.append('analysis_type', analysisType);
 
     const response = await fetch(`${API_BASE_URL}/api/analyze/audio/direct`, {

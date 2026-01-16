@@ -64,7 +64,7 @@ export default function UploadPage() {
                 });
 
                 // Direct upload and analyze
-                const result = await analyzeAudioDirect(file, analysisType);
+                const result = await analyzeAudioDirect([file], analysisType);
 
                 if (result.success) {
                     setUploadState({

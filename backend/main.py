@@ -176,62 +176,70 @@ async def analyze_audio(request: AnalyzeAudioRequest):
 
 # ユニバーサル分析エンドポイント（名前は互換性のために analyze/audio/direct も残すか、Frontendを変える）
 # Frontendを /api/analyze/direct に変更する方針で実装
+from typing import List
+
+# ユニバーサル分析エンドポイント（名前は互換性のために analyze/audio/direct も残すか、Frontendを変える）
+# Frontendを /api/analyze/direct に変更する方針で実装
 @app.post("/api/analyze/direct", response_model=AnalyzeResponse)
 @app.post("/api/analyze/audio/direct", response_model=AnalyzeResponse) # 互換性エイリアス
 async def analyze_file_direct(
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     analysis_type: str = Form("assessment")
 ):
     """
-    ファイル直接分析（Universal Input）
-    - 音声、PDF、画像を受け入れ
-    - 運営会議/サービス会議ならDriveへ保存
-    - 分析実行
+    ファイル直接分析（Universal Input、複数ファイル対応）
+    - 音声、PDF、画像を受け入れ（複数可）
+    - 運営会議/サービス会議ならDriveへ保存（全ファイル）
+    - 全ファイルを統合して分析実行
     """
     try:
-        print(f"DEBUG: analyze_file_direct called with filename={file.filename}, type={analysis_type}", flush=True)
+        print(f"DEBUG: analyze_file_direct called with {len(files)} files, type={analysis_type}", flush=True)
         
-        content = await file.read()
-        mime_type = file.content_type or "application/octet-stream"
-        
-        # 簡易的なMIMEタイプ補正
-        if mime_type == "application/octet-stream":
-            fname = file.filename.lower()
-            if fname.endswith(".pdf"): mime_type = "application/pdf"
-            elif fname.endswith(".jpg") or fname.endswith(".jpeg"): mime_type = "image/jpeg"
-            elif fname.endswith(".png"): mime_type = "image/png"
-            elif fname.endswith(".m4a") or fname.endswith(".mp4"): mime_type = "audio/mp4"
-            elif fname.endswith(".mp3"): mime_type = "audio/mpeg"
+        file_contents = [] # [(content, mime_type), ...]
 
-        print(f"DEBUG: File size: {len(content)} bytes, Mime: {mime_type}", flush=True)
+        for file in files:
+            content = await file.read()
+            mime_type = file.content_type or "application/octet-stream"
+            
+            # 簡易的なMIMEタイプ補正
+            if mime_type == "application/octet-stream":
+                fname = file.filename.lower()
+                if fname.endswith(".pdf"): mime_type = "application/pdf"
+                elif fname.endswith(".jpg") or fname.endswith(".jpeg"): mime_type = "image/jpeg"
+                elif fname.endswith(".png"): mime_type = "image/png"
+                elif fname.endswith(".m4a") or fname.endswith(".mp4"): mime_type = "audio/mp4"
+                elif fname.endswith(".mp3"): mime_type = "audio/mpeg"
 
-        # 1. Google Driveへの自動保存 (会議系のみ)
-        if analysis_type in ["management_meeting", "service_meeting"]:
-            folder_id = drive_service.get_folder_id_by_type(analysis_type)
-            if folder_id:
-                print(f"DEBUG: Uploading to Drive Folder: {folder_id}", flush=True)
-                success, link = drive_service.upload_file(content, file.filename, mime_type, folder_id)
-                if success:
-                    print(f"DEBUG: Drive Upload Success: {link}", flush=True)
+            print(f"DEBUG: File {file.filename} size: {len(content)} bytes, Mime: {mime_type}", flush=True)
+            file_contents.append((content, mime_type))
+
+            # 1. Google Driveへの自動保存 (会議系のみ)
+            if analysis_type in ["management_meeting", "service_meeting"]:
+                folder_id = drive_service.get_folder_id_by_type(analysis_type)
+                if folder_id:
+                    print(f"DEBUG: Uploading to Drive Folder: {folder_id}", flush=True)
+                    success, link = drive_service.upload_file(content, file.filename, mime_type, folder_id)
+                    if success:
+                        print(f"DEBUG: Drive Upload Success: {link}", flush=True)
+                    else:
+                        print("DEBUG: Drive Upload Failed", flush=True)
                 else:
-                    print("DEBUG: Drive Upload Failed", flush=True)
-            else:
-                print(f"DEBUG: No folder ID configured for {analysis_type}, skipping upload", flush=True)
+                    print(f"DEBUG: No folder ID configured for {analysis_type}, skipping upload", flush=True)
 
-        # 2. 分析実行
+        # 2. 分析実行（統合分析）
         if analysis_type == "assessment":
-            result = ai_service.extract_assessment_info(content, mime_type)
+            result = ai_service.extract_assessment_info(file_contents)
         elif analysis_type == "management_meeting":
-            result = ai_service.generate_management_meeting_summary(content, mime_type)
+            result = ai_service.generate_management_meeting_summary(file_contents)
         elif analysis_type == "service_meeting":
-            result = ai_service.generate_service_meeting_summary(content, mime_type)
+            result = ai_service.generate_service_meeting_summary(file_contents)
         elif analysis_type == "meeting":
-            result = ai_service.generate_meeting_summary(content, mime_type)
+            result = ai_service.generate_meeting_summary(file_contents)
         elif analysis_type == "qa":
-            result = ai_service.extract_qa_from_audio(content, mime_type)
+            result = ai_service.extract_qa_from_audio(file_contents)
         else:
-            # デフォルトでアセスメント扱い（PDF/画像エンドポイントからの移行など）
-            result = ai_service.extract_assessment_info(content, mime_type)
+            # デフォルトでアセスメント扱い
+            result = ai_service.extract_assessment_info(file_contents)
         
         print(f"DEBUG: Analysis complete for type={analysis_type}", flush=True)
         return AnalyzeResponse(success=True, data=result)
@@ -245,13 +253,26 @@ async def analyze_file_direct(
 @app.post("/api/analyze/pdf", response_model=AnalyzeResponse)
 async def analyze_pdf(file: UploadFile = File(...)):
     """PDFファイル分析（互換性用: アセスメントとして処理）"""
-    return await analyze_file_direct(file, analysis_type="assessment")
+    # 単一ファイルをリストにラップして呼び出す必要があるが実体がないため
+    # ここでは analyze_file_direct を直接呼べないので、ロジックを再利用するか、
+    # analyze_file_directのシグネチャ変更によりこちらは個別に実装しなおすのが安全
+    # ただ、analyze_file_direct はList[UploadFile]を期待するので、[file]を渡せばよいはずだが
+    # FastAPIのDIの仕組み上、関数呼び出しは単純ではないため、個別に処理を書くのが無難。
+    # しかしDRY原則からして、ai_serviceを呼ぶだけにする。
+    
+    content = await file.read()
+    mime_type = "application/pdf"
+    result = ai_service.extract_assessment_info([(content, mime_type)])
+    return AnalyzeResponse(success=True, data=result)
 
 
 @app.post("/api/analyze/image", response_model=AnalyzeResponse)
 async def analyze_image(file: UploadFile = File(...)):
     """画像ファイル分析（互換性用: アセスメントとして処理）"""
-    return await analyze_file_direct(file, analysis_type="assessment")
+    content = await file.read()
+    mime_type = file.content_type or "image/jpeg"
+    result = ai_service.extract_assessment_info([(content, mime_type)])
+    return AnalyzeResponse(success=True, data=result)
 
 
 @app.post("/api/sheets/write", response_model=AnalyzeResponse)

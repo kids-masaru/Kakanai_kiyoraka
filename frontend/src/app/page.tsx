@@ -97,18 +97,11 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
 
   // Multi-file state
-  type FileStatus = "waiting" | "analyzing" | "writing" | "complete" | "error";
-
-  interface FileItem {
-    id: string;
-    file: File;
-    status: FileStatus;
-    message: string;
-    resultUrl?: string;
-  }
-
-  const [files, setFiles] = useState<FileItem[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processStatus, setProcessStatus] = useState<string>(""); // "analyzing", "writing", "complete", "error"
+  const [processMessage, setProcessMessage] = useState<string>("");
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
 
@@ -142,22 +135,25 @@ export default function Home() {
 
   // Helper to add files
   const addFiles = (newFiles: File[]) => {
-    const newItems: FileItem[] = newFiles.map(f => ({
-      id: Math.random().toString(36).substr(2, 9),
-      file: f,
-      status: "waiting",
-      message: "待機中"
-    }));
-    setFiles(prev => [...prev, ...newItems]);
+    // 重複チェックは簡易的にファイル名で（同名ファイルが別の内容の可能性もあるが許容）
+    const currentNames = new Set(files.map(f => f.name));
+    const uniqueNewFiles = newFiles.filter(f => !currentNames.has(f.name));
+    setFiles(prev => [...prev, ...uniqueNewFiles]);
+
+    // ステータスリセット
+    if (processStatus === "complete" || processStatus === "error") {
+      setProcessStatus("");
+      setProcessMessage("");
+      setResultUrl(null);
+    }
   };
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       addFiles(Array.from(e.target.files));
     }
-    // file input reset is irrelevant as we append
     e.target.value = "";
-  }, []);
+  }, [files, processStatus]);
 
   // Drag and Drop handlers
   const [isDragging, setIsDragging] = useState(false);
@@ -197,10 +193,15 @@ export default function Home() {
     if (droppedFiles.length !== validFiles.length) {
       alert("一部のファイルは対応していない形式のためスキップされました。(音声, PDF, 画像のみ対応)");
     }
-  }, []);
+  }, [files, processStatus]); // add files dependency
 
-  const removeFile = (id: string) => {
-    setFiles(prev => prev.filter(f => f.id !== id));
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+    if (processStatus === "complete" || processStatus === "error") {
+      setProcessStatus("");
+      setProcessMessage("");
+      setResultUrl(null);
+    }
   };
 
   const getFormData = () => {
@@ -219,91 +220,81 @@ export default function Home() {
     }
   };
 
-  const updateFileStatus = (id: string, updates: Partial<FileItem>) => {
-    setFiles(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
-  };
-
-  const processQueue = async () => {
+  const handleProcess = async () => {
     if (files.length === 0) return;
     setIsProcessing(true);
+    setProcessStatus("analyzing");
+    setProcessMessage(`AI分析中... (${files.length}件のファイルを統合中)`);
+    setResultUrl(null);
 
-    // Wait 1s just for UX
-    await new Promise(r => setTimeout(r, 500));
+    try {
+      // 1. Analyze (All files at once)
+      const analysisType = selectedType === "assessment" ? "assessment" :
+        selectedType === "management_meeting" ? "management_meeting" : "service_meeting";
 
-    // Process files sequentially
-    for (const fileItem of files) {
-      if (fileItem.status === "complete" || fileItem.status === "writing") continue; // Skip already done
+      const analyzeResult = await analyzeAudioDirect(files, analysisType);
 
-      try {
-        // 1. Analyze
-        updateFileStatus(fileItem.id, { status: "analyzing", message: "AI分析中..." });
-
-        const analysisType = selectedType === "assessment" ? "assessment" :
-          selectedType === "management_meeting" ? "management_meeting" : "service_meeting";
-
-        const analyzeResult = await analyzeAudioDirect(fileItem.file, analysisType);
-
-        if (!analyzeResult.success) {
-          throw new Error(analyzeResult.error || "分析失敗");
-        }
-
-        // 2. Write
-        updateFileStatus(fileItem.id, { status: "writing", message: "シート書き込み中..." });
-
-        // Prepare write data
-        let writeMode: 'mapping' | 'append' | 'create' = 'mapping';
-        let meetingType = "";
-
-        if (selectedType === "assessment") {
-          writeMode = "create";
-        } else if (selectedType === "management_meeting") {
-          writeMode = "append";
-          meetingType = "management_meeting";
-        } else if (selectedType === "service_meeting") {
-          writeMode = "append";
-          meetingType = "service_meeting";
-        }
-
-        const meetingDate = selectedType === "management_meeting" ? managementForm.開催日 : serviceForm.開催日;
-        const meetingTime = selectedType === "management_meeting" ? `${managementForm.開始時間}~${managementForm.終了時間}` : `${serviceForm.開始時間}~${serviceForm.終了時間}`;
-        const meetingPlace = selectedType === "management_meeting" ? managementForm.開催場所 : serviceForm.開催場所;
-        // Assessment has no participants field in this context, use form data if needed or extracted
-        let meetingParticipants = "";
-        if (selectedType === "management_meeting") meetingParticipants = managementForm.参加者;
-        if (selectedType === "service_meeting") meetingParticipants = serviceForm.担当者名;
-
-        const writeResult = await writeToSheets(
-          getCurrentSpreadsheetId(),
-          "",
-          (analyzeResult.data || {}) as Record<string, unknown>,
-          "assessment",
-          writeMode,
-          meetingType,
-          meetingDate,
-          meetingTime,
-          meetingPlace,
-          meetingParticipants
-        );
-
-        if (writeResult.success) {
-          updateFileStatus(fileItem.id, {
-            status: "complete",
-            message: "完了",
-            resultUrl: writeResult.data?.sheet_url as string
-          });
-        } else {
-          throw new Error(writeResult.error || "書き込み失敗");
-        }
-
-      } catch (error) {
-        updateFileStatus(fileItem.id, {
-          status: "error",
-          message: error instanceof Error ? error.message : "エラー"
-        });
+      if (!analyzeResult.success) {
+        throw new Error(analyzeResult.error || "分析失敗");
       }
-    }
 
-    setIsProcessing(false);
+      // 2. Write
+      setProcessStatus("writing");
+      setProcessMessage("スプレッドシート書き込み中...");
+
+      // Prepare write data
+      let writeMode: 'mapping' | 'append' | 'create' = 'mapping';
+      let meetingType = "";
+
+      if (selectedType === "assessment") {
+        writeMode = "create";
+      } else if (selectedType === "management_meeting") {
+        writeMode = "append";
+        meetingType = "management_meeting";
+      } else if (selectedType === "service_meeting") {
+        writeMode = "append";
+        meetingType = "service_meeting";
+      }
+
+      const meetingDate = selectedType === "management_meeting" ? managementForm.開催日 : serviceForm.開催日;
+      const meetingTime = selectedType === "management_meeting" ? `${managementForm.開始時間}~${managementForm.終了時間}` : `${serviceForm.開始時間}~${serviceForm.終了時間}`;
+      const meetingPlace = selectedType === "management_meeting" ? managementForm.開催場所 : serviceForm.開催場所;
+      // Assessment has no participants field in this context
+      let meetingParticipants = "";
+      if (selectedType === "management_meeting") meetingParticipants = managementForm.参加者;
+      if (selectedType === "service_meeting") meetingParticipants = serviceForm.担当者名;
+
+      const writeResult = await writeToSheets(
+        getCurrentSpreadsheetId(),
+        "",
+        (analyzeResult.data || {}) as Record<string, unknown>,
+        "assessment",
+        writeMode,
+        meetingType,
+        meetingDate,
+        meetingTime,
+        meetingPlace,
+        meetingParticipants
+      );
+
+      if (writeResult.success) {
+        setProcessStatus("complete");
+        setProcessMessage("✅ 完了しました");
+        setResultUrl(writeResult.data?.sheet_url as string);
+
+        if (writeResult.data?.sheet_url) {
+          window.open(writeResult.data.sheet_url as string, '_blank');
+        }
+      } else {
+        throw new Error(writeResult.error || "書き込み失敗");
+      }
+
+    } catch (error) {
+      setProcessStatus("error");
+      setProcessMessage(`❌ エラー: ${error instanceof Error ? error.message : "不明なエラー"}`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const renderFormByType = () => {
@@ -527,39 +518,19 @@ export default function Home() {
             {/* File List */}
             {files.length > 0 && (
               <div className="space-y-2 mb-4">
-                {files.map(f => (
-                  <div key={f.id} className="p-3 bg-gray-50 rounded-lg flex items-center gap-3 border border-gray-100">
-                    {/* Status Icon */}
-                    <div className="flex-shrink-0">
-                      {f.status === "waiting" && <span className="text-gray-400">🕒</span>}
-                      {f.status === "analyzing" && <span className="text-blue-500 animate-pulse">🤖</span>}
-                      {f.status === "writing" && <span className="text-green-500 animate-pulse">📝</span>}
-                      {f.status === "complete" && <span className="text-green-600">✅</span>}
-                      {f.status === "error" && <span className="text-red-500">❌</span>}
-                    </div>
-
-                    {/* File Info */}
+                {files.map((f, i) => (
+                  <div key={i} className="p-3 bg-gray-50 rounded-lg flex items-center gap-3 border border-gray-100">
+                    <div className="flex-shrink-0 text-blue-500">📄</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-700 truncate">{f.file.name}</p>
-                        <p className="text-xs text-gray-500">{(f.file.size / 1024 / 1024).toFixed(2)}MB</p>
-                      </div>
-                      <div className="flex items-center justify-between mt-1">
-                        <p className={`text-xs ${f.status === "error" ? "text-red-600" :
-                            f.status === "complete" ? "text-green-600" : "text-gray-500"
-                          }`}>{f.message}</p>
-                        {f.resultUrl && (
-                          <a href={f.resultUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
-                            シートを開く ↗
-                          </a>
-                        )}
+                        <p className="text-sm font-medium text-gray-700 truncate">{f.name}</p>
+                        <p className="text-xs text-gray-500">{(f.size / 1024 / 1024).toFixed(2)}MB</p>
                       </div>
                     </div>
-
                     {/* Remove Button (only if not processing) */}
                     <button
-                      onClick={() => removeFile(f.id)}
-                      disabled={f.status === "analyzing" || f.status === "writing"}
+                      onClick={() => removeFile(i)}
+                      disabled={isProcessing}
                       className="text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:hover:text-gray-400"
                     >
                       &times;
@@ -572,25 +543,42 @@ export default function Home() {
             {/* Action Buttons */}
             <div className="flex gap-3">
               <button
-                onClick={() => setFiles([])}
+                onClick={() => { setFiles([]); setProcessStatus(""); setProcessMessage(""); setResultUrl(null); }}
                 disabled={isProcessing || files.length === 0}
                 className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"
               >
                 クリア
               </button>
               <button
-                onClick={processQueue}
+                onClick={handleProcess}
                 disabled={isProcessing || files.length === 0}
-                className="flex-1 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                className="flex-1 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex justify-center items-center gap-2"
               >
-                {isProcessing ? "実行中..." : `選択した${files.length}件を${documentTypes.find(t => t.value === selectedType)?.label}として作成`}
+                {isProcessing ? (
+                  <>
+                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                    <span>処理中...</span>
+                  </>
+                ) : (
+                  `選択した${files.length}件を統合して${documentTypes.find(t => t.value === selectedType)?.label}を作成`
+                )}
               </button>
             </div>
 
-            {isProcessing && (
-              <p className="text-center text-xs text-gray-500 mt-2">
-                ※ 順番に処理しています。ブラウザを閉じないでください。
-              </p>
+            {/* Status Message */}
+            {processMessage && (
+              <div className={`mt-4 p-4 rounded-lg flex flex-col items-center justify-center text-center ${processStatus === "error" ? "bg-red-50 text-red-700 border border-red-200" :
+                  processStatus === "complete" ? "bg-green-50 text-green-700 border border-green-200" :
+                    "bg-blue-50 text-blue-700 border border-blue-200"
+                }`}>
+                <p className="font-medium">{processMessage}</p>
+                {processStatus === "analyzing" && <p className="text-xs mt-1 text-blue-600">※ファイルサイズや数によっては数分かかる場合があります</p>}
+                {resultUrl && (
+                  <a href={resultUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center px-4 py-2 bg-white text-green-700 border border-green-200 rounded-lg shadow-sm hover:bg-green-50">
+                    📊 シートを開く ↗
+                  </a>
+                )}
+              </div>
             )}
 
           </div>

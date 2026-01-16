@@ -117,21 +117,28 @@ class AIService:
                 pass
             raise e
 
-    def _run_analysis(self, file_data: bytes, mime_type: str, prompt: str) -> Dict[str, Any]:
-        """共通分析実行メソッド"""
-        uploaded_file = None
-        tmp_path = None
+    def _run_analysis(self, file_contents: list[tuple[bytes, str]], prompt: str) -> Dict[str, Any]:
+        """共通分析実行メソッド（複数ファイル対応）"""
+        uploaded_files = []
+        tmp_paths = []
         try:
-            uploaded_file, tmp_path = self._upload_to_gemini(file_data, mime_type)
-            response = self._generate_with_retry([uploaded_file, prompt])
+            # 全ファイルをアップロード
+            for file_data, mime_type in file_contents:
+                uploaded_file, tmp_path = self._upload_to_gemini(file_data, mime_type)
+                uploaded_files.append(uploaded_file)
+                tmp_paths.append(tmp_path)
+            
+            # 生成実行
+            response = self._generate_with_retry([*uploaded_files, prompt])
             return self._parse_json_result(response.text)
         finally:
-            if uploaded_file:
+            # クリーンアップ
+            for uploaded_file in uploaded_files:
                 try:
                     genai.delete_file(uploaded_file.name)
                 except:
                     pass
-            if tmp_path:
+            for tmp_path in tmp_paths:
                 try:
                     os.unlink(tmp_path)
                 except:
@@ -139,12 +146,13 @@ class AIService:
 
     # --- 公開メソッド ---
 
-    def extract_assessment_info(self, file_data: bytes, mime_type: str = "audio/mp4") -> Dict[str, Any]:
-        """アセスメント情報を抽出（音声/PDF/画像対応）"""
+    def extract_assessment_info(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
+        """アセスメント情報を抽出（音声/PDF/画像対応、複数ファイル統合）"""
         prompt = """
 あなたは、ベテランの認定調査員であり、ケアマネージャーです。
-提供されたデータ（音声、PDF、画像）を注意深く分析し、
+提供されたデータ（音声、PDF、画像など複数可）を注意深く分析し、
 「アセスメントシート（基本情報、課題分析、認定調査票）」を作成するために必要な情報を抽出してください。
+データが複数ある場合は、それらを統合して1つの事例としてまとめてください。
 
 出力は以下のJSON形式のみで行ってください。
 
@@ -180,24 +188,24 @@ class AIService:
   }
 }
 """
-        return self._run_analysis(file_data, mime_type, prompt)
+        return self._run_analysis(file_contents, prompt)
 
     # 互換性のために残す（中身は新メソッド呼出）
     def extract_from_pdf(self, pdf_data: bytes, mime_type: str) -> Dict[str, Any]:
-        return self.extract_assessment_info(pdf_data, mime_type)
+        return self.extract_assessment_info([(pdf_data, mime_type)])
 
     def extract_from_image(self, image_data: bytes, mime_type: str) -> Dict[str, Any]:
-        return self.extract_assessment_info(image_data, mime_type)
+        return self.extract_assessment_info([(image_data, mime_type)])
     
     def extract_assessment_from_audio(self, audio_data: bytes) -> Dict[str, Any]:
-        return self.extract_assessment_info(audio_data, "audio/mp4")
+        return self.extract_assessment_info([(audio_data, "audio/mp4")])
 
     # 会議系（音声/PDF/画像対応に拡張。引数名は後方互換でfile_dataを想定）
-    def generate_meeting_summary(self, file_data: bytes, mime_type: str = "audio/mp4") -> Dict[str, Any]:
-        """会議録を生成（汎用）"""
+    def generate_meeting_summary(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
+        """会議録を生成（汎用、複数ファイル統合）"""
         prompt = """
 あなたはケアマネジメントの専門家であり、医療・福祉分野のプロの記録担当者です。
-アップロードされたデータを注意深く分析し、公式な会議録を作成します。
+アップロードされたデータ（複数ファイル可）を注意深く分析し、統合して1つの公式な会議録を作成します。
 
 出力形式は以下のJSONです：
 {
@@ -212,13 +220,13 @@ class AIService:
   "結論": "決定事項リスト"
 }
 """
-        return self._run_analysis(file_data, mime_type, prompt)
+        return self._run_analysis(file_contents, prompt)
 
-    def generate_management_meeting_summary(self, file_data: bytes, mime_type: str = "audio/mp4") -> Dict[str, Any]:
-        """運営会議専用プロンプト（care-dx-app互換）"""
+    def generate_management_meeting_summary(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
+        """運営会議専用プロンプト（care-dx-app互換、複数ファイル統合）"""
         prompt = """
 あなたは、医療・福祉分野のプロの記録担当者です。
-入力されたデータ（会議の音声、または記録書類）を分析し、以下の情報を抽出・整理して、**JSON形式**で出力してください。
+入力されたデータ（会議の音声、または記録書類など複数可）を分析・統合し、以下の情報を抽出・整理して、**JSON形式**で出力してください。
 
 ## 出力するJSONのキーと作成ルール
 
@@ -255,14 +263,14 @@ class AIService:
   "sharing_matters": "■利用者情報共有\\n〇武島（ケアマネ）：宮城様 老健退所後の自宅生活...\\n\\n■その他共有事項\\n〇リハビリ：松浦クリニックでの利用が可能か..."
 }
 """
-        return self._run_analysis(file_data, mime_type, prompt)
+        return self._run_analysis(file_contents, prompt)
 
-    def generate_service_meeting_summary(self, file_data: bytes, mime_type: str = "audio/mp4") -> Dict[str, Any]:
-        """サービス担当者会議専用プロンプト（care-dx-app互換）"""
+    def generate_service_meeting_summary(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
+        """サービス担当者会議専用プロンプト（care-dx-app互換、複数ファイル統合）"""
         prompt = """
 あなたはケアマネジメントの専門家であり、医療・福祉分野のプロの記録担当者です。
-アップロードされたデータを注意深く分析し、公式な会議録を作成します。
-あなたのタスクは、入力データの内容を完全に理解・把握し、以下の【統合出力フォーマット】に厳密に従って会議録をまとめることです。
+アップロードされたデータ（複数ファイル可）を注意深く分析し、統合して1つの公式な会議録を作成します。
+あなたのタスクは、入力データ全体の内容を完全に理解・把握し、以下の【統合出力フォーマット】に厳密に従って会議録をまとめることです。
 
 # 出力要件
 以下のキーを持つJSONオブジェクトを出力してください。
@@ -289,7 +297,7 @@ JSONキー仕様:
 
 **必須要件**：結論には必ず「サービス担当へ、個別援助計画書の提出を依頼する」という文言を含めてください。
 """
-        response = self._run_analysis(file_data, mime_type, prompt)
+        response = self._run_analysis(file_contents, prompt)
         
         # 必須文言の強制追加
         mandatory_text = "サービス担当へ、個別援助計画書の提出を依頼する"
@@ -299,7 +307,7 @@ JSONキー仕様:
         
         return response
 
-    def extract_qa_from_audio(self, file_data: bytes, mime_type: str = "audio/mp4") -> Dict[str, Any]:
+    def extract_qa_from_audio(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
         """Q&A抽出"""
         prompt = """
 提供されたデータを質問と回答のペアとして抽出してください。
@@ -311,7 +319,7 @@ JSONキー仕様:
   ]
 }
 """
-        return self._run_analysis(file_data, mime_type, prompt)
+        return self._run_analysis(file_contents, prompt)
 
     def generate_genogram_data(self, text: str) -> Dict[str, Any]:
         """テキストからジェノグラムデータを生成"""
