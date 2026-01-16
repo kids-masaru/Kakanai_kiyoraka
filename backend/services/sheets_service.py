@@ -508,10 +508,13 @@ class SheetsService:
         template_id: str,
         folder_id: str,
         data_dict: Dict[str, Any],
-        sheet_name: str = "貼り付け用"
+        sheet_name: str = None
     ) -> Dict[str, Any]:
         """
         アセスメントシート用に新規スプレッドシートを作成して書き込む
+        Care-DX-App同様、2段階書き込みを行う
+        Step 1: 1枚目のシート（基本情報）に mapping.txt で書き込み
+        Step 2: 「２．ｱｾｽﾒﾝﾄｼｰﾄ」に mapping2.txt で書き込み
         """
         print(f"DEBUG: create_and_write_assessment called", flush=True)
         from .drive_service import drive_service
@@ -535,16 +538,38 @@ class SheetsService:
         
         # 2. データの書き込み
         try:
-            write_count = self.write_data(
+            total_write_count = 0
+            
+            # Step 1: 1枚目のシート（基本情報）
+            # sheet_nameが指定されていなければNone（先頭シート）
+            print("DEBUG: Writing Step 1 (Basic Info)...", flush=True)
+            count1 = self.write_data(
                 spreadsheet_id=new_id,
-                sheet_name=sheet_name,
+                sheet_name=sheet_name, # Noneなら先頭シート
                 data=data_dict,
-                mapping_type="assessment"
+                mapping_type="assessment" # mapping.txt使用
             )
+            total_write_count += count1
+            
+            # Step 2: 2枚目のシート（詳細情報）
+            # 常に「２．ｱｾｽﾒﾝﾄｼｰﾄ」へ書き込む
+            print("DEBUG: Writing Step 2 (Assessment Detail)...", flush=True)
+            try:
+                count2 = self.write_data(
+                    spreadsheet_id=new_id,
+                    sheet_name="２．ｱｾｽﾒﾝﾄｼｰﾄ",
+                    data=data_dict,
+                    mapping_type="assessment_detail" # mapping != "assessment" なので mapping2.txt使用
+                )
+                total_write_count += count2
+            except Exception as e2:
+                print(f"WARNING: Step 2 writing failed: {e2}", flush=True)
+                # Step 2の失敗は致命的エラーにしない（Step 1が成功していればファイルはできている）
+
             return {
                 "success": True,
                 "sheet_url": new_url,
-                "write_count": write_count,
+                "write_count": total_write_count,
                 "spreadsheet_id": new_id
             }
         except Exception as e:

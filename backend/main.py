@@ -277,7 +277,7 @@ async def write_to_sheets(request: SheetsWriteRequest):
                 template_id=template_id,
                 folder_id=folder_id,
                 data_dict=request.data,
-                sheet_name=request.sheet_name or "貼り付け用"
+                sheet_name=request.sheet_name
             )
             return AnalyzeResponse(
                 success=result.get("success", False),
