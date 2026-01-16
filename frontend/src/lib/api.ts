@@ -155,11 +155,21 @@ export async function analyzeImage(file: File): Promise<AnalyzeResponse> {
 /**
  * Write data to Google Sheets
  */
+/**
+ * Write data to Google Sheets
+ */
 export async function writeToSheets(
     spreadsheetId: string,
     sheetName: string,
     data: Record<string, unknown>,
-    mappingType: string = 'assessment'
+    mappingType: string = 'assessment',
+    // Additional parameters for Meeting modes
+    writeMode: 'mapping' | 'append' | 'create' = 'mapping',
+    meetingType: string = '',
+    meetingDate: string = '',
+    meetingTime: string = '',
+    meetingPlace: string = '',
+    meetingParticipants: string = ''
 ): Promise<AnalyzeResponse> {
     const response = await fetch(`${API_BASE_URL}/api/sheets/write`, {
         method: 'POST',
@@ -171,6 +181,12 @@ export async function writeToSheets(
             sheet_name: sheetName,
             data,
             mapping_type: mappingType,
+            write_mode: writeMode,
+            meeting_type: meetingType,
+            date_str: meetingDate,
+            time_str: meetingTime,
+            place: meetingPlace,
+            participants: meetingParticipants
         }),
     });
 

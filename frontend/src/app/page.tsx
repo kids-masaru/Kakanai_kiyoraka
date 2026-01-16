@@ -50,7 +50,7 @@ interface Settings {
 
 // Spreadsheet IDs from environment variables (Vercel) with fallbacks
 const DEFAULT_SETTINGS: Settings = {
-  assessmentSheetId: process.env.NEXT_PUBLIC_ASSESSMENT_SHEET_ID || "1H_jUc8jU4youPNUae5KBvPKljGTT4v13MKaRUiKoujI",
+  assessmentSheetId: process.env.NEXT_PUBLIC_ASSESSMENT_SHEET_ID || "", // Assessment uses template now
   serviceMeetingSheetId: process.env.NEXT_PUBLIC_SERVICE_MEETING_SHEET_ID || "1ufwuCz0dCxiqL6PmlpqziD82lvaVI4ucong13NAY7Wg",
   managementMeetingSheetId: process.env.NEXT_PUBLIC_MANAGEMENT_MEETING_SHEET_ID || "1SlRGB0NVaTm_AoAyR4hqsA8b1rNz95fbUUELs0o-yI8",
   geminiModel: process.env.NEXT_PUBLIC_GEMINI_MODEL || "gemini-3-flash-preview",
@@ -166,9 +166,15 @@ export default function Home() {
     setIsDragging(false);
 
     const droppedFile = e.dataTransfer.files?.[0];
-    if (droppedFile && droppedFile.type.startsWith('audio/')) {
-      setFile(droppedFile);
-      setUploadState({ status: "idle", progress: 0, message: "" });
+    if (droppedFile) {
+      // 許容するファイルタイプ: Audio, PDF, Image
+      const type = droppedFile.type;
+      if (type.startsWith('audio/') || type === 'application/pdf' || type.startsWith('image/')) {
+        setFile(droppedFile);
+        setUploadState({ status: "idle", progress: 0, message: "" });
+      } else {
+        alert("対応していないファイル形式です。(音声, PDF, 画像のみ対応)");
+      }
     }
   }, []);
 
@@ -182,7 +188,7 @@ export default function Home() {
 
   const getCurrentSpreadsheetId = () => {
     switch (selectedType) {
-      case "assessment": return settings.assessmentSheetId;
+      case "assessment": return settings.assessmentSheetId; // Note: For 'create' mode, this might be ignored generally, but passed anyway
       case "service_meeting": return settings.serviceMeetingSheetId;
       case "management_meeting": return settings.managementMeetingSheetId;
     }
@@ -195,9 +201,11 @@ export default function Home() {
 
       setUploadState({ status: "analyzing", progress: 50, message: "AI分析中...（大きなファイルは時間がかかります）" });
 
-      // 直接アップロードして分析（R2を経由しない）
+      // 分析タイプを決定
       const analysisType = selectedType === "assessment" ? "assessment" :
         selectedType === "management_meeting" ? "management_meeting" : "service_meeting";
+
+      // ユニバーサルアップロードAPIを使用
       const result = await analyzeAudioDirect(file, analysisType);
 
       if (result.success) {
@@ -213,6 +221,58 @@ export default function Home() {
   const resetUpload = () => {
     setFile(null);
     setUploadState({ status: "idle", progress: 0, message: "" });
+  };
+
+  const handleWrite = async () => {
+    try {
+      setUploadState(prev => ({ ...prev, message: "スプレッドシートに書き込み中..." }));
+
+      let writeMode: 'mapping' | 'append' | 'create' = 'mapping';
+      let meetingType = "";
+
+      if (selectedType === "assessment") {
+        writeMode = "create"; // アセスメントは新規シート作成
+      } else if (selectedType === "management_meeting") {
+        writeMode = "append";
+        meetingType = "management_meeting";
+      } else if (selectedType === "service_meeting") {
+        writeMode = "append";
+        meetingType = "service_meeting";
+      }
+
+      // 追記データ用
+      const meetingDate = selectedType === "management_meeting" ? managementForm.開催日 : serviceForm.開催日;
+      const meetingTime = selectedType === "management_meeting" ? `${managementForm.開始時間}~${managementForm.終了時間}` : `${serviceForm.開始時間}~${serviceForm.終了時間}`;
+      const meetingPlace = selectedType === "management_meeting" ? managementForm.開催場所 : serviceForm.開催場所;
+      const meetingParticipants = selectedType === "management_meeting" ? managementForm.参加者 : serviceForm.担当者名; // サービス会議は担当者名を使用
+
+      const result = await writeToSheets(
+        getCurrentSpreadsheetId(),
+        "",  // 空の場合はデフォルト
+        uploadState.result || {},
+        "assessment", // mappingType (ignored for append/create mostly)
+        writeMode,
+        meetingType,
+        meetingDate,
+        meetingTime,
+        meetingPlace,
+        meetingParticipants
+      );
+
+      if (result.success) {
+        let msg = `✅ 書き込み完了（${result.data?.written_cells || 1}件）`;
+        if (result.data?.sheet_url) {
+          msg += ` URL: ${result.data.sheet_url}`;
+          // URLを新しいタブで開く
+          window.open(result.data.sheet_url, '_blank');
+        }
+        setUploadState(prev => ({ ...prev, status: "complete", message: msg }));
+      } else {
+        throw new Error(result.error || "書き込みに失敗しました");
+      }
+    } catch (error) {
+      setUploadState(prev => ({ ...prev, message: `❌ 書き込みエラー: ${error instanceof Error ? error.message : '不明なエラー'}` }));
+    }
   };
 
   const renderFormByType = () => {
@@ -350,6 +410,7 @@ export default function Home() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">アセスメントシートID</label>
+            <p className="text-xs text-gray-500 mb-1">※新規作成モードのため現在は使用されません</p>
             <input type="text" value={settings.assessmentSheetId} onChange={(e) => setSettings({ ...settings, assessmentSheetId: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-xs" />
           </div>
           <div>
@@ -415,7 +476,7 @@ export default function Home() {
 
           {/* Upload Section */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">音声ファイル</h3>
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">ファイル分析（音声・PDF・画像）</h3>
 
             <div
               className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors mb-3 ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
@@ -424,11 +485,11 @@ export default function Home() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <input type="file" accept="audio/*,.m4a,.mp3,.wav" onChange={handleFileChange} className="hidden" id="file-input" />
+              <input type="file" accept="audio/*,.m4a,.mp3,.wav,application/pdf,image/*,.jpg,.jpeg,.png" onChange={handleFileChange} className="hidden" id="file-input" />
               <label htmlFor="file-input" className="cursor-pointer flex flex-col items-center">
                 <UploadIcon />
                 <p className="text-sm text-gray-500 mt-2">{isDragging ? 'ここにドロップ' : 'クリックまたはドラッグ&ドロップ'}</p>
-                <p className="text-xs text-gray-400">M4A, MP3, WAV</p>
+                <p className="text-xs text-gray-400">音声(m4a/mp3), PDF, 画像(jpg/png) に対応</p>
               </label>
             </div>
 
@@ -470,25 +531,7 @@ export default function Home() {
                   <pre className="text-xs text-gray-700 whitespace-pre-wrap">{JSON.stringify(uploadState.result, null, 2)}</pre>
                 </div>
                 <button
-                  onClick={async () => {
-                    try {
-                      setUploadState(prev => ({ ...prev, message: "スプレッドシートに書き込み中..." }));
-                      const mappingType = selectedType === "assessment" ? "assessment" : "meeting";
-                      const result = await writeToSheets(
-                        getCurrentSpreadsheetId(),
-                        "",  // 空の場合は最初のシート
-                        uploadState.result || {},
-                        mappingType
-                      );
-                      if (result.success) {
-                        setUploadState(prev => ({ ...prev, status: "complete", message: `✅ スプレッドシートに書き込み完了（${result.data?.written_cells || 0}セル）` }));
-                      } else {
-                        throw new Error(result.error || "書き込みに失敗しました");
-                      }
-                    } catch (error) {
-                      setUploadState(prev => ({ ...prev, message: `❌ 書き込みエラー: ${error instanceof Error ? error.message : '不明なエラー'}` }));
-                    }
-                  }}
+                  onClick={handleWrite}
                   className="w-full py-3 bg-green-500 text-white font-medium rounded-lg hover:bg-green-600 transition-all mb-2"
                 >
                   📊 スプレッドシートに書き込み

@@ -502,3 +502,51 @@ class SheetsService:
             import traceback
             traceback.print_exc()
             return {"success": False, "error": str(e), "write_count": 0}
+
+    def create_and_write_assessment(
+        self,
+        template_id: str,
+        folder_id: str,
+        data_dict: Dict[str, Any],
+        sheet_name: str = "貼り付け用"
+    ) -> Dict[str, Any]:
+        """
+        アセスメントシート用に新規スプレッドシートを作成して書き込む
+        """
+        print(f"DEBUG: create_and_write_assessment called", flush=True)
+        from .drive_service import drive_service
+        
+        # 1. 新規スプレッドシート作成
+        import datetime
+        now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 名前を決定（利用者名があれば入れる）
+        client_name = ""
+        if "基本情報" in data_dict and "氏名" in data_dict["基本情報"]:
+            client_name = data_dict["基本情報"]["氏名"]
+        elif "氏名" in data_dict:
+            client_name = data_dict["氏名"]
+            
+        new_filename = f"アセスメント_{client_name}_{now_str}" if client_name else f"アセスメント_{now_str}"
+        
+        new_id, new_url = drive_service.copy_spreadsheet(template_id, new_filename, folder_id)
+        
+        if not new_id:
+            return {"success": False, "error": "スプレッドシートの作成に失敗しました"}
+        
+        # 2. データの書き込み
+        try:
+            write_count = self.write_data(
+                spreadsheet_id=new_id,
+                sheet_name=sheet_name,
+                data=data_dict,
+                mapping_type="assessment"
+            )
+            return {
+                "success": True,
+                "sheet_url": new_url,
+                "write_count": write_count,
+                "spreadsheet_id": new_id
+            }
+        except Exception as e:
+            print(f"ERROR: Failed to write to new spreadsheet: {e}")
+            return {"success": False, "error": f"シート作成は成功しましたが書き込みに失敗: {str(e)}", "sheet_url": new_url}
