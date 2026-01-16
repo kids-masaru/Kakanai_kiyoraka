@@ -249,7 +249,7 @@ export default function Home() {
       const result = await writeToSheets(
         getCurrentSpreadsheetId(),
         "",  // 空の場合はデフォルト
-        uploadState.result || {},
+        (uploadState.result || {}) as Record<string, unknown>,
         "assessment", // mappingType (ignored for append/create mostly)
         writeMode,
         meetingType,
@@ -264,7 +264,7 @@ export default function Home() {
         if (result.data?.sheet_url) {
           msg += ` URL: ${result.data.sheet_url}`;
           // URLを新しいタブで開く
-          window.open(result.data.sheet_url, '_blank');
+          window.open(result.data.sheet_url as string, '_blank');
         }
         setUploadState(prev => ({ ...prev, status: "complete", message: msg }));
       } else {
