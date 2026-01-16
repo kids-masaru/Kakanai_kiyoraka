@@ -123,13 +123,17 @@ class SheetsService:
 
 
     def _load_mappings(self):
-        """マッピングファイルを読み込み"""
+        """マッピングファイルを読み込み（MappingParserを使用）"""
+        try:
+            from utils.mapping_parser import MappingParser
+        except ImportError:
+            from ..utils.mapping_parser import MappingParser
+        
         print(f"DEBUG: Looking for mapping file at: {MAPPING_FILE}", flush=True)
-        print(f"DEBUG: MAPPING_FILE exists: {MAPPING_FILE.exists()}", flush=True)
         if MAPPING_FILE.exists():
             try:
                 mapping_text = MAPPING_FILE.read_text(encoding='utf-8')
-                self.mapping_dict = self._parse_mapping(mapping_text)
+                self.mapping_dict = MappingParser.parse_mapping(mapping_text)
                 print(f"DEBUG: Loaded mapping.txt with {len(self.mapping_dict)} keys", flush=True)
             except Exception as e:
                 print(f"Failed to load mapping.txt: {e}", flush=True)
@@ -139,61 +143,9 @@ class SheetsService:
         if MAPPING2_FILE.exists():
             try:
                 mapping_text = MAPPING2_FILE.read_text(encoding='utf-8')
-                self.mapping2_dict = self._parse_mapping(mapping_text)
+                self.mapping2_dict = MappingParser.parse_mapping(mapping_text)
             except Exception as e:
                 print(f"Failed to load mapping2.txt: {e}")
-    
-    def _parse_mapping(self, mapping_text: str) -> Dict[str, Dict[str, Any]]:
-        """
-        マッピング定義テキストを解析し、辞書形式に変換する
-        """
-        mapping_dict = {}
-        lines = mapping_text.strip().split('\n')
-        
-        i = 0
-        while i < len(lines):
-            line = lines[i].strip()
-            
-            # 空行やセパレータはスキップ
-            if not line or line.startswith('-'):
-                i += 1
-                continue
-            
-            # 項目名：セル番地 の形式を解析
-            if '：' in line:
-                parts = line.split('：')
-                if len(parts) == 2:
-                    item_name = parts[0].strip()
-                    cell_and_options = parts[1].strip()
-                    
-                    # セル番地と選択肢を分離
-                    cell_match = re.match(r'^([A-Z]+\d+)', cell_and_options)
-                    if cell_match:
-                        cell = cell_match.group(1)
-                        options = []
-                        
-                        # 選択肢の解析（同じ行にある場合）
-                        options_match = re.search(r'（(.+?)）', cell_and_options)
-                        if options_match:
-                            options_str = options_match.group(1)
-                            options = [opt.strip() for opt in options_str.split('、')]
-                        
-                        # 次の行に選択肢がある場合もチェック
-                        if i + 1 < len(lines):
-                            next_line = lines[i + 1].strip()
-                            if next_line.startswith('（') and next_line.endswith('）'):
-                                options_str = next_line[1:-1]
-                                options = [opt.strip() for opt in options_str.split('、')]
-                                i += 1
-                        
-                        mapping_dict[item_name] = {
-                            "cell": cell,
-                            "options": options
-                        }
-            
-            i += 1
-        
-        return mapping_dict
     
     def _flatten_data(self, data: Dict[str, Any], prefix: str = "") -> Dict[str, str]:
         """

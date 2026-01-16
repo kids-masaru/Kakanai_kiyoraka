@@ -102,6 +102,7 @@ export default function Home() {
   const [processStatus, setProcessStatus] = useState<string>(""); // "analyzing", "writing", "complete", "error"
   const [processMessage, setProcessMessage] = useState<string>("");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [extractionResult, setExtractionResult] = useState<any>(null);
 
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
 
@@ -201,6 +202,7 @@ export default function Home() {
       setProcessStatus("");
       setProcessMessage("");
       setResultUrl(null);
+      setExtractionResult(null);
     }
   };
 
@@ -226,6 +228,7 @@ export default function Home() {
     setProcessStatus("analyzing");
     setProcessMessage(`AI分析中... (${files.length}件のファイルを統合中)`);
     setResultUrl(null);
+    setExtractionResult(null);
 
     try {
       // 1. Analyze (All files at once)
@@ -237,6 +240,7 @@ export default function Home() {
       if (!analyzeResult.success) {
         throw new Error(analyzeResult.error || "分析失敗");
       }
+      setExtractionResult(analyzeResult.data);
 
       // 2. Write
       setProcessStatus("writing");
@@ -543,7 +547,7 @@ export default function Home() {
             {/* Action Buttons */}
             <div className="flex gap-3">
               <button
-                onClick={() => { setFiles([]); setProcessStatus(""); setProcessMessage(""); setResultUrl(null); }}
+                onClick={() => { setFiles([]); setProcessStatus(""); setProcessMessage(""); setResultUrl(null); setExtractionResult(null); }}
                 disabled={isProcessing || files.length === 0}
                 className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"
               >
@@ -568,8 +572,8 @@ export default function Home() {
             {/* Status Message */}
             {processMessage && (
               <div className={`mt-4 p-4 rounded-lg flex flex-col items-center justify-center text-center ${processStatus === "error" ? "bg-red-50 text-red-700 border border-red-200" :
-                  processStatus === "complete" ? "bg-green-50 text-green-700 border border-green-200" :
-                    "bg-blue-50 text-blue-700 border border-blue-200"
+                processStatus === "complete" ? "bg-green-50 text-green-700 border border-green-200" :
+                  "bg-blue-50 text-blue-700 border border-blue-200"
                 }`}>
                 <p className="font-medium">{processMessage}</p>
                 {processStatus === "analyzing" && <p className="text-xs mt-1 text-blue-600">※ファイルサイズや数によっては数分かかる場合があります</p>}
@@ -579,6 +583,20 @@ export default function Home() {
                   </a>
                 )}
               </div>
+            )}
+
+            {/* Extraction Result Visualization */}
+            {extractionResult && (
+              <details className="mt-4 p-4 border rounded bg-gray-50">
+                <summary className="cursor-pointer font-bold text-blue-600 select-none">
+                  🔍 AI抽出データを確認する
+                </summary>
+                <div className="mt-2 text-xs overflow-auto max-h-96 bg-white p-2 rounded border border-gray-200">
+                  <pre className="whitespace-pre-wrap font-mono text-gray-700">
+                    {JSON.stringify(extractionResult, null, 2)}
+                  </pre>
+                </div>
+              </details>
             )}
 
           </div>

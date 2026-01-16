@@ -8,7 +8,17 @@ import io
 import time
 import re
 import tempfile
+from pathlib import Path
 from typing import Dict, Any, Optional
+try:
+    from utils.mapping_parser import MappingParser
+except ImportError:
+    # Fallback for different execution contexts
+    from ..utils.mapping_parser import MappingParser
+
+# マッピングファイルのパス
+CONFIG_DIR = Path(__file__).parent.parent / "config"
+MAPPING_FILE = CONFIG_DIR / "mapping.txt"
 
 class AIService:
     def __init__(self):
@@ -146,48 +156,63 @@ class AIService:
 
     # --- 公開メソッド ---
 
-    def extract_assessment_info(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
-        """アセスメント情報を抽出（音声/PDF/画像対応、複数ファイル統合）"""
-        prompt = """
+    def _generate_assessment_prompt(self) -> str:
+        """mapping.txtから動的にプロンプトを生成"""
+        # マッピング定義の読み込み
+        mapping_dict = {}
+        if MAPPING_FILE.exists():
+            try:
+                mapping_text = MAPPING_FILE.read_text(encoding='utf-8')
+                mapping_dict = MappingParser.parse_mapping(mapping_text)
+            except Exception as e:
+                print(f"Failed to load mapping.txt in AIService: {e}")
+        
+        # 項目リストの作成
+        field_instructions = []
+        for key, value in mapping_dict.items():
+            instruction = f"- {key}"
+            options = value.get("options", [])
+            if options:
+                options_str = "、".join(options)
+                instruction += f" (選択肢: {options_str})"
+            field_instructions.append(instruction)
+        
+        fields_str = "\n".join(field_instructions)
+
+        prompt = f"""
 あなたは、ベテランの認定調査員であり、ケアマネージャーです。
 提供されたデータ（音声、PDF、画像など複数可）を注意深く分析し、
-「アセスメントシート（基本情報、課題分析、認定調査票）」を作成するために必要な情報を抽出してください。
-データが複数ある場合は、それらを統合して1つの事例としてまとめてください。
+「アセスメントシート」を作成するために必要な情報を抽出してください。
 
-出力は以下のJSON形式のみで行ってください。
+以下の「抽出項目リスト」にある**全ての項目**について、入力データから情報を探してください。
+特記事項や備考欄も含め、可能な限り詳細に抽出してください。
 
-## 抽出方針
-- 会話の中から「事実関係」「本人の発言」「家族の発言」「専門職の判断」を拾う
-- 画像やPDFの場合は、記載されたテキストや手書き文字を読み取る
-- 不明な項目は "（空白）" とする
+## 出力形式
+以下のキーを持つフラットなJSON形式で出力してください。
+キー名は「抽出項目リスト」の名称と完全に一致させてください。
 
-## 出力JSONフォーマット
-{
-  "基本情報": {
-    "氏名": "", "性別": "", "生年月日": "", "年齢": "", "住所": "", "電話番号": ""
-  },
-  "利用者情報": {
-     "既往歴": "", "主訴": "", "家族構成": "", "キーパーソン": ""
-  },
-  "認定調査項目": {
-    "身体機能": "（麻痺、拘縮、寝返り、歩行などの状況）",
-    "生活機能": "（食事、排泄、入浴、着脱、移動などの介助量）",
-    "認知機能": "（意思疎通、短期記憶、徘徊、生年月日等の認識）",
-    "精神・行動障害": "（感情不安定、暴言、暴力、拒絶など）",
-    "社会生活": "（服薬管理、金銭管理、買い物、調理など）"
-  },
-  "アセスメント情報": {
-    "相談の経緯": "",
-    "本人・家族の意向": "",
-    "生活状況": "（起床就寝、日中の過ごし方、外出頻度など）",
-    "住環境": "（段差、手すり、住宅改修の必要性など）",
-    "他サービス利用状況": ""
-  },
-  "主治医・医療": {
-    "主治医": "", "医療機関": "", "特別な医療処置": ""
-  }
-}
+```json
+{{
+  "項目名1": "値1",
+  "項目名2": "値2",
+  ...
+}}
+```
+
+## 抽出ルール
+1. **選択肢がある項目**: 必ず提示された選択肢の中から最も適切なものを選んでください。
+2. **情報の不在**: 情報が見つからない項目は、空文字 "" または "（空白）" としてください。
+3. **推測の禁止**: 明確な根拠がない場合は無理に埋めず、空白にしてください。
+4. **統合**: 複数のファイル（例：音声とPDF）にまたがる情報は、矛盾がないように統合してください。
+
+## 抽出項目リスト
+{fields_str}
 """
+        return prompt
+
+    def extract_assessment_info(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
+        """アセスメント情報を抽出（音声/PDF/画像対応、複数ファイル統合、動的プロンプト）"""
+        prompt = self._generate_assessment_prompt()
         return self._run_analysis(file_contents, prompt)
 
     # 互換性のために残す（中身は新メソッド呼出）
