@@ -45,14 +45,20 @@ class SheetsService:
                 print("DEBUG: Found GOOGLE_SERVICE_ACCOUNT_JSON", flush=True)
                 service_account_info = json.loads(service_account_json)
                 
-                # ★重要: 秘密鍵の改行コードを正規化
-                # Railwayなどの環境変数で \n が \\n (リテラル文字) として渡される問題を修正
                 if "private_key" in service_account_info:
                     raw_key = service_account_info["private_key"]
+                    # Log key format for debugging (safe subset)
+                    print(f"DEBUG: Private Key Start: {repr(raw_key[:50])}", flush=True)
+                    print(f"DEBUG: Private Key Length: {len(raw_key)}", flush=True)
+                    
                     if "\\n" in raw_key:
                         print("DEBUG: Normalizing private key newlines", flush=True)
                         service_account_info["private_key"] = raw_key.replace("\\n", "\n")
-                
+                    else:
+                        print("DEBUG: Private key does not contain literal \\n. Treating as valid or already normalized.", flush=True)
+
+                print(f"DEBUG: Service Account Email: {service_account_info.get('client_email')}", flush=True)
+                print(f"DEBUG: Project ID: {service_account_info.get('project_id')}", flush=True)
                 print("DEBUG: Successfully parsed JSON", flush=True)
             except Exception as e:
                 print(f"Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON: {e}", flush=True)
