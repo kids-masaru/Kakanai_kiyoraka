@@ -30,8 +30,9 @@ class SheetsService:
         self._load_mappings()
     
     def _initialize_client(self):
-        """Google Sheets APIクライアントを初期化（care-dx-app互換 - シンプル版）"""
-        import base64
+        """Google Sheets APIクライアントを初期化（google.oauth2を使用 - 安全対策済み）"""
+        from google.oauth2 import service_account
+        import google.auth
         
         # 認証情報を保持する変数
         service_account_info = None
@@ -43,6 +44,15 @@ class SheetsService:
             try:
                 print("DEBUG: Found GOOGLE_SERVICE_ACCOUNT_JSON", flush=True)
                 service_account_info = json.loads(service_account_json)
+                
+                # ★重要: 秘密鍵の改行コードを正規化
+                # Railwayなどの環境変数で \n が \\n (リテラル文字) として渡される問題を修正
+                if "private_key" in service_account_info:
+                    raw_key = service_account_info["private_key"]
+                    if "\\n" in raw_key:
+                        print("DEBUG: Normalizing private key newlines", flush=True)
+                        service_account_info["private_key"] = raw_key.replace("\\n", "\n")
+                
                 print("DEBUG: Successfully parsed JSON", flush=True)
             except Exception as e:
                 print(f"Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON: {e}", flush=True)
@@ -52,10 +62,16 @@ class SheetsService:
             service_account_base64 = os.getenv("GOOGLE_SERVICE_ACCOUNT_BASE64")
             if service_account_base64:
                 try:
+                    import base64
                     print("DEBUG: Found GOOGLE_SERVICE_ACCOUNT_BASE64", flush=True)
                     service_account_base64 = service_account_base64.strip()
                     decoded_bytes = base64.b64decode(service_account_base64)
                     service_account_info = json.loads(decoded_bytes.decode('utf-8'))
+                    
+                    # Base64の場合も念のため正規化
+                    if "private_key" in service_account_info:
+                        service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
+                        
                     print("DEBUG: Successfully parsed Base64", flush=True)
                 except Exception as e:
                     print(f"Failed to initialize from Base64 env var: {e}", flush=True)
@@ -66,9 +82,9 @@ class SheetsService:
             if service_account_file.exists():
                 try:
                     print(f"DEBUG: Found service_account_file at {service_account_file}", flush=True)
-                    # care-dx-appと同じくファイルから直接読み込み
-                    credentials = ServiceAccountCredentials.from_json_keyfile_name(
-                        str(service_account_file), SCOPES
+                    # ファイルから直接読み込む場合も新しいライブラリを使用
+                    credentials = service_account.Credentials.from_service_account_file(
+                        str(service_account_file), scopes=SCOPES
                     )
                     self.client = gspread.authorize(credentials)
                     print("Google Sheets client initialized successfully (file-based)", flush=True)
@@ -81,9 +97,9 @@ class SheetsService:
             try:
                 print(f"DEBUG: Attempting auth for: {service_account_info.get('client_email')}", flush=True)
                 
-                # care-dx-appと同じシンプルな認証方式
-                credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-                    service_account_info, SCOPES
+                # 新しいライブラリ google.oauth2 を使用
+                credentials = service_account.Credentials.from_service_account_info(
+                    service_account_info, scopes=SCOPES
                 )
                 self.client = gspread.authorize(credentials)
                 print("Google Sheets client initialized successfully (dict-based)", flush=True)

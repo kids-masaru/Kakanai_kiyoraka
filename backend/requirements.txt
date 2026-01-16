@@ -5,6 +5,8 @@ python-dotenv==1.0.0
 google-generativeai==0.8.0
 gspread
 oauth2client
+oauth2client
+google-auth
 google-api-python-client
 boto3==1.34.0
 python-multipart==0.0.6
