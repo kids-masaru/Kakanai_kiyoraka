@@ -15,8 +15,9 @@ MAPPING_FILE = CONFIG_DIR / "mapping.txt"
 MAPPING2_FILE = CONFIG_DIR / "mapping2.txt"
 
 # Google Sheets APIスコープ（care-dx-appと同じ設定）
+# Google Sheets APIスコープ（推奨設定）
 SCOPES = [
-    'https://spreadsheets.google.com/feeds',
+    'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
 ]
 
