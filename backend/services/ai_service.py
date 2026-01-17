@@ -201,8 +201,8 @@ class AIService:
         return combined_mapping
 
     def _categorize_fields(self, all_keys: list[str]) -> list[list[str]]:
-        """フィールドを6つのグループに分類する"""
-        groups = [[], [], [], [], [], []]
+        """フィールドを7つのグループに分類する"""
+        groups = [[], [], [], [], [], [], []]
         
         # Keyword Definitions
         # G1: Basic/Social
@@ -215,17 +215,29 @@ class AIService:
         g4_keywords = ["移動", "食事", "水分", "排泄", "入浴", "更衣", "整容", "寝返り", "起き上がり", "立ち上がり", "座位", "立位", "移乗"]
         # G5: IADL/Comm (Cognitive Tasks)
         g5_keywords = ["服薬", "調理", "掃除", "洗濯", "買物", "物品", "金銭", "コミュニケーション", "意思"]
-        # G6: Social/Env (Environment & Summary)
-        g6_keywords = ["社会", "役割", "介護力", "支援", "サービス", "留意", "環境因子", "個人因子", "見通し"]
+        # G6: Services (Specific Service Usage block)
+        g6_keywords = ["利用している支援", "社会資源", "フォーマル", "インフォーマル"]
+        # G7: Social/Env (Environment & Summary)
+        g7_keywords = ["社会", "役割", "介護力", "支援", "サービス", "留意", "環境因子", "個人因子", "見通し", "住宅改修", "福祉用具", "社会保障"]
 
         used_keys = set()
 
         for key in all_keys:
             assigned = False
-            # Check G6
+            
+            # Check G6 (Services) FIRST (To prevent '支援' in G7 from catching it)
             for kw in g6_keywords:
                 if kw in key:
                     groups[5].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # Check G7 (Env)
+            for kw in g7_keywords:
+                if kw in key:
+                    groups[6].append(key)
                     used_keys.add(key)
                     assigned = True
                     break
@@ -276,8 +288,8 @@ class AIService:
                     break
             if assigned: continue
             
-            # Default to G6 if no match
-            groups[5].append(key)
+            # Default to G7 if no match
+            groups[6].append(key)
         
         return groups
 
@@ -310,7 +322,7 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
 """
 
     def extract_assessment_info(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
-        """アセスメント情報を6段階で抽出して統合"""
+        """アセスメント情報を7段階で抽出して統合"""
         
         # 1. 準備：マッピング読み込みとグループ化
         full_mapping = self._load_all_mappings()
@@ -322,7 +334,8 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
             "心身機能・精神状態（麻痺、感覚、認知症、BPSDなど）",
             "身体ADL（移動、食事、排泄、入浴などの基本動作）",
             "IADL・認知・伝達（家事、金銭管理、コミュニケーション）",
-            "社会・環境・見通し（社会参加、居住環境、介護力、総合方針）"
+            "サービスの利用状況・社会資源（フォーマル/インフォーマル、頻度、事業者）",
+            "社会・環境・見通し・留意事項（居住環境、介護力、総合的方針）"
         ]
 
         master_result = {}
@@ -331,12 +344,12 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
         uploaded_files, tmp_paths = self._upload_files_to_gemini(file_contents)
         
         try:
-            # 3. 6段階の抽出実行
+            # 3. 7段階の抽出実行
             for i, fields in enumerate(field_groups):
                 if not fields:
                     continue
                 
-                print(f"DEBUG: Starting Assessment Phase {i+1}/6: {phase_names[i]} ({len(fields)} fields)", flush=True)
+                print(f"DEBUG: Starting Assessment Phase {i+1}/7: {phase_names[i]} ({len(fields)} fields)", flush=True)
                 
                 # プロンプト生成
                 prompt = self._generate_partial_prompt(fields, full_mapping, phase_names[i])
