@@ -473,15 +473,25 @@ class SheetsService:
         
         # 1. 新規スプレッドシート作成
         import datetime
-        now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        date_str = datetime.datetime.now().strftime("%Y%m%d")
+        
         # 名前を決定（利用者名があれば入れる）
-        client_name = ""
-        if "基本情報" in data_dict and "氏名" in data_dict["基本情報"]:
-            client_name = data_dict["基本情報"]["氏名"]
-        elif "氏名" in data_dict:
+        client_name = "名称未設定"
+        
+        # 優先順位: 利用者情報_氏名_漢字 > 氏名 > 基本情報.氏名
+        if "利用者情報_氏名_漢字" in data_dict and data_dict["利用者情報_氏名_漢字"]:
+            client_name = data_dict["利用者情報_氏名_漢字"]
+        elif "氏名" in data_dict and data_dict["氏名"]:
             client_name = data_dict["氏名"]
+        elif "基本情報" in data_dict and isinstance(data_dict["基本情報"], dict) and "氏名" in data_dict["基本情報"]:
+            client_name = data_dict["基本情報"]["氏名"]
             
-        new_filename = f"アセスメント_{client_name}_{now_str}" if client_name else f"アセスメント_{now_str}"
+        # 空白除去
+        client_name = client_name.replace(" ", "").replace("　", "").strip()
+        if not client_name:
+            client_name = "名称未設定"
+            
+        new_filename = f"{client_name}_{date_str}_アセスメントシート"
         
         new_id, new_url = drive_service.copy_spreadsheet(template_id, new_filename, folder_id)
         
