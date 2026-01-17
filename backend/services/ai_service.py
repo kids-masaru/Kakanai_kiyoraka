@@ -201,27 +201,46 @@ class AIService:
         return combined_mapping
 
     def _categorize_fields(self, all_keys: list[str]) -> list[list[str]]:
-        """フィールドを4つのグループに分類する"""
-        groups = [[], [], [], []]
+        """フィールドを6つのグループに分類する"""
+        groups = [[], [], [], [], [], []]
         
-        # キーワード定義
-        # Group 1: 基本・社会 (Basic, User, Family, Housing, Insurance)
+        # Keyword Definitions
+        # G1: Basic/Social
         g1_keywords = ["作成", "受付", "相談者", "利用者", "家族", "世帯", "住居", "設備", "年金", "保険", "認定", "障害高齢者", "認知症高齢者", "被保険者"]
-        
-        # Group 2: 医療・経歴 (History, Health, Emergency)
+        # G2: Medical/History
         g2_keywords = ["経緯", "搬送", "これまでの生活", "生活リズム", "健康", "病名", "薬", "受診", "主治医", "医療機関"]
-        
-        # Group 3: 心身・精神 (Body, Mind, Sensory)
+        # G3: Body/Mind
         g3_keywords = ["視力", "聴力", "口腔", "栄養", "身長", "体重", "血圧", "アレルギー", "麻痺", "拘縮", "痛み", "褥瘡", "認知機能", "行動障害", "精神", "阻害要因", "体温", "脈拍"]
-        
-        # Group 4: 生活・活動 (ADL, IADL, Role, Env)
-        g4_keywords = ["移動", "食事", "水分", "排泄", "入浴", "更衣", "整容", "寝返り", "起き上がり", "立ち上がり", "座位", "立位", "移乗", "服薬", "調理", "掃除", "洗濯", "買物", "物品", "金銭", "コミュニケーション", "意思", "社会", "役割", "介護力", "支援", "サービス", "留意", "環境因子", "個人因子", "見通し"]
+        # G4: Physical ADL (Body Movement)
+        g4_keywords = ["移動", "食事", "水分", "排泄", "入浴", "更衣", "整容", "寝返り", "起き上がり", "立ち上がり", "座位", "立位", "移乗"]
+        # G5: IADL/Comm (Cognitive Tasks)
+        g5_keywords = ["服薬", "調理", "掃除", "洗濯", "買物", "物品", "金銭", "コミュニケーション", "意思"]
+        # G6: Social/Env (Environment & Summary)
+        g6_keywords = ["社会", "役割", "介護力", "支援", "サービス", "留意", "環境因子", "個人因子", "見通し"]
 
         used_keys = set()
 
         for key in all_keys:
             assigned = False
-            # Group 4 Check (Specific ADLs first)
+            # Check G6
+            for kw in g6_keywords:
+                if kw in key:
+                    groups[5].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # Check G5
+            for kw in g5_keywords:
+                if kw in key:
+                    groups[4].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # Check G4
             for kw in g4_keywords:
                 if kw in key:
                     groups[3].append(key)
@@ -230,7 +249,7 @@ class AIService:
                     break
             if assigned: continue
 
-            # Group 3 Check
+            # Check G3
             for kw in g3_keywords:
                 if kw in key:
                     groups[2].append(key)
@@ -239,7 +258,7 @@ class AIService:
                     break
             if assigned: continue
 
-            # Group 2 Check
+            # Check G2
             for kw in g2_keywords:
                 if kw in key:
                     groups[1].append(key)
@@ -248,7 +267,7 @@ class AIService:
                     break
             if assigned: continue
 
-            # Group 1 Check
+            # Check G1
             for kw in g1_keywords:
                 if kw in key:
                     groups[0].append(key)
@@ -257,8 +276,8 @@ class AIService:
                     break
             if assigned: continue
             
-            # Default to Group 4 if no match (catch-all for miscellaneous)
-            groups[3].append(key)
+            # Default to G6 if no match
+            groups[5].append(key)
         
         return groups
 
@@ -291,7 +310,7 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
 """
 
     def extract_assessment_info(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
-        """アセスメント情報を4段階で抽出して統合"""
+        """アセスメント情報を6段階で抽出して統合"""
         
         # 1. 準備：マッピング読み込みとグループ化
         full_mapping = self._load_all_mappings()
@@ -301,7 +320,9 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
             "基本情報・社会基盤（氏名、住所、家族、認定情報など）",
             "医療・経歴（病歴、受診状況、生活歴など）",
             "心身機能・精神状態（麻痺、感覚、認知症、BPSDなど）",
-            "生活・活動・参加（ADL、IADL、社会参加、サービス利用など）"
+            "身体ADL（移動、食事、排泄、入浴などの基本動作）",
+            "IADL・認知・伝達（家事、金銭管理、コミュニケーション）",
+            "社会・環境・見通し（社会参加、居住環境、介護力、総合方針）"
         ]
 
         master_result = {}
@@ -310,12 +331,12 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
         uploaded_files, tmp_paths = self._upload_files_to_gemini(file_contents)
         
         try:
-            # 3. 4段階の抽出実行
+            # 3. 6段階の抽出実行
             for i, fields in enumerate(field_groups):
                 if not fields:
                     continue
                 
-                print(f"DEBUG: Starting Assessment Phase {i+1}/4: {phase_names[i]} ({len(fields)} fields)", flush=True)
+                print(f"DEBUG: Starting Assessment Phase {i+1}/6: {phase_names[i]} ({len(fields)} fields)", flush=True)
                 
                 # プロンプト生成
                 prompt = self._generate_partial_prompt(fields, full_mapping, phase_names[i])
@@ -335,7 +356,7 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
                         
                 except Exception as e:
                     print(f"ERROR: Phase {i+1} failed: {e}", flush=True)
-                    # 1つのフェーズが失敗しても他は続ける（部分的成功を目指す）
+                    # 1つのフェーズが失敗しても他は続ける
             
             return master_result
 
