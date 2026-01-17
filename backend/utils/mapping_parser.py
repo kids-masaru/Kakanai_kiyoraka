@@ -23,12 +23,18 @@ class MappingParser:
                 continue
             
             # 項目名：セル番地 の形式を解析
+            sep = None
             if '：' in line:
-                parts = line.split('：')
+                sep = '：'
+            elif ':' in line:
+                sep = ':'
+            
+            if sep:
+                parts = line.split(sep)
                 if len(parts) >= 2:
                     # 項目名にコロンが含まれる場合の対策（最初のコロンで分割）
                     item_name = parts[0].strip()
-                    cell_and_options = "：".join(parts[1:]).strip()
+                    cell_and_options = sep.join(parts[1:]).strip()
                     
                     # セル番地と選択肢を分離
                     # A-Zの列番号 + 数字の行番号 にマッチ
