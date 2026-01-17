@@ -402,9 +402,32 @@ class SheetsService:
             
             # データの準備
             # 日時
-            ui_dt = f"{date_str} {time_str}".strip()
-            ai_dt = data.get("meeting_date", "")
-            val_date = ui_dt if (date_str and time_str) else (ai_dt if ai_dt else ui_dt)
+            # 日時
+            raw_date = date_str if date_str else data.get("meeting_date", "")
+            val_date = raw_date
+            
+            # 日付フォーマットの統一 (YYYY年MM月DD日)
+            if raw_date:
+                import datetime
+                try:
+                    # 既にYYYY-MM-DD形式の場合
+                    if "-" in raw_date:
+                         # 時間が含まれている場合を除去 ("2026-01-17 10:00" -> "2026-01-17")
+                         clean_date = raw_date.split(" ")[0]
+                         dt = datetime.datetime.strptime(clean_date, "%Y-%m-%d")
+                         val_date = dt.strftime("%Y年%m月%d日")
+                    # スラッシュ区切りの場合
+                    elif "/" in raw_date:
+                         clean_date = raw_date.split(" ")[0]
+                         dt = datetime.datetime.strptime(clean_date, "%Y/%m/%d")
+                         val_date = dt.strftime("%Y年%m月%d日")
+                except Exception as e:
+                    print(f"Date formatting failed for {raw_date}: {e}")
+                    # 変換失敗時はそのまま
+            
+            # 時間があれば後ろに付与する？画像ではA列は日付だけに見えるが、
+            # 行35は "2026-01-17 10:0" となっているので時間が混ざっている。
+            # 既存行(23-34)は日付のみ "2026年01月12日" なので、日付のみにするのが正解。
             
             # 参加者
             val_participants = participants if participants else data.get("participants", "")
