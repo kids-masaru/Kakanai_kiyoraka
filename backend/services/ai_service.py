@@ -19,6 +19,7 @@ except ImportError:
 # マッピングファイルのパス
 CONFIG_DIR = Path(__file__).parent.parent / "config"
 MAPPING_FILE = CONFIG_DIR / "mapping.txt"
+MAPPING2_FILE = CONFIG_DIR / "mapping2.txt"
 
 class AIService:
     def __init__(self):
@@ -139,81 +140,208 @@ class AIService:
                 tmp_paths.append(tmp_path)
             
             # 生成実行
+            # 注意: extract_assessment_info以外で使われる汎用メソッド（会議録など）
             response = self._generate_with_retry([*uploaded_files, prompt])
             return self._parse_json_result(response.text)
         finally:
-            # クリーンアップ
-            for uploaded_file in uploaded_files:
-                try:
-                    genai.delete_file(uploaded_file.name)
-                except:
-                    pass
-            for tmp_path in tmp_paths:
-                try:
-                    os.unlink(tmp_path)
-                except:
-                    pass
+            self._cleanup_files(uploaded_files, tmp_paths)
 
     # --- 公開メソッド ---
 
-    def _generate_assessment_prompt(self) -> str:
-        """mapping.txtから動的にプロンプトを生成"""
-        # マッピング定義の読み込み
-        mapping_dict = {}
+    # --- 内部ヘルパー: ファイル管理 ---
+
+    def _upload_files_to_gemini(self, file_contents: list[tuple[bytes, str]]) -> tuple[list[Any], list[str]]:
+        """ファイルをまとめてアップロードし、ファイルオブジェクトと一時パスを返す"""
+        uploaded_files = []
+        tmp_paths = []
+        try:
+            for file_data, mime_type in file_contents:
+                uploaded_file, tmp_path = self._upload_to_gemini(file_data, mime_type)
+                uploaded_files.append(uploaded_file)
+                tmp_paths.append(tmp_path)
+            return uploaded_files, tmp_paths
+        except Exception as e:
+            # 失敗時はそこまでアップロードしたものをクリーンアップして再送出
+            self._cleanup_files(uploaded_files, tmp_paths)
+            raise e
+
+    def _cleanup_files(self, uploaded_files: list[Any], tmp_paths: list[str]):
+        """Gemini上のファイルとローカル一時ファイルを削除"""
+        for uploaded_file in uploaded_files:
+            try:
+                genai.delete_file(uploaded_file.name)
+            except:
+                pass
+        for tmp_path in tmp_paths:
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
+
+    def _load_all_mappings(self) -> Dict[str, Any]:
+        """mapping.txt と mapping2.txt の両方を読み込んで統合した辞書を返す"""
+        combined_mapping = {}
+        
+        # Mapping 1
         if MAPPING_FILE.exists():
             try:
-                mapping_text = MAPPING_FILE.read_text(encoding='utf-8')
-                mapping_dict = MappingParser.parse_mapping(mapping_text)
+                text = MAPPING_FILE.read_text(encoding='utf-8')
+                combined_mapping.update(MappingParser.parse_mapping(text))
             except Exception as e:
-                print(f"Failed to load mapping.txt in AIService: {e}")
+                print(f"Failed to load mapping.txt: {e}")
         
-        # 項目リストの作成
-        field_instructions = []
-        for key, value in mapping_dict.items():
-            instruction = f"- {key}"
-            options = value.get("options", [])
-            if options:
-                options_str = "、".join(options)
-                instruction += f" (選択肢: {options_str})"
-            field_instructions.append(instruction)
+        # Mapping 2
+        if MAPPING2_FILE.exists():
+            try:
+                text = MAPPING2_FILE.read_text(encoding='utf-8')
+                combined_mapping.update(MappingParser.parse_mapping(text))
+            except Exception as e:
+                print(f"Failed to load mapping2.txt: {e}")
+                
+        return combined_mapping
+
+    def _categorize_fields(self, all_keys: list[str]) -> list[list[str]]:
+        """フィールドを4つのグループに分類する"""
+        groups = [[], [], [], []]
         
-        fields_str = "\n".join(field_instructions)
+        # キーワード定義
+        # Group 1: 基本・社会 (Basic, User, Family, Housing, Insurance)
+        g1_keywords = ["作成", "受付", "相談者", "利用者", "家族", "世帯", "住居", "設備", "年金", "保険", "認定", "障害高齢者", "認知症高齢者", "被保険者"]
+        
+        # Group 2: 医療・経歴 (History, Health, Emergency)
+        g2_keywords = ["経緯", "搬送", "これまでの生活", "生活リズム", "健康", "病名", "薬", "受診", "主治医", "医療機関"]
+        
+        # Group 3: 心身・精神 (Body, Mind, Sensory)
+        g3_keywords = ["視力", "聴力", "口腔", "栄養", "身長", "体重", "血圧", "アレルギー", "麻痺", "拘縮", "痛み", "褥瘡", "認知機能", "行動障害", "精神", "阻害要因", "体温", "脈拍"]
+        
+        # Group 4: 生活・活動 (ADL, IADL, Role, Env)
+        g4_keywords = ["移動", "食事", "水分", "排泄", "入浴", "更衣", "整容", "寝返り", "起き上がり", "立ち上がり", "座位", "立位", "移乗", "服薬", "調理", "掃除", "洗濯", "買物", "物品", "金銭", "コミュニケーション", "意思", "社会", "役割", "介護力", "支援", "サービス", "留意", "環境因子", "個人因子", "見通し"]
 
-        prompt = f"""
-あなたは、ベテランの認定調査員であり、ケアマネージャーです。
-提供されたデータ（音声、PDF、画像など複数可）を注意深く分析し、
-「アセスメントシート」を作成するために必要な情報を抽出してください。
+        used_keys = set()
 
-以下の「抽出項目リスト」にある**全ての項目**について、入力データから情報を探してください。
-特記事項や備考欄も含め、可能な限り詳細に抽出してください。
+        for key in all_keys:
+            assigned = False
+            # Group 4 Check (Specific ADLs first)
+            for kw in g4_keywords:
+                if kw in key:
+                    groups[3].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # Group 3 Check
+            for kw in g3_keywords:
+                if kw in key:
+                    groups[2].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # Group 2 Check
+            for kw in g2_keywords:
+                if kw in key:
+                    groups[1].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # Group 1 Check
+            for kw in g1_keywords:
+                if kw in key:
+                    groups[0].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+            
+            # Default to Group 4 if no match (catch-all for miscellaneous)
+            groups[3].append(key)
+        
+        return groups
+
+    def _generate_partial_prompt(self, fields: list[str], mapping_dict: Dict[str, Any], phase_name: str) -> str:
+        """指定されたフィールドリスト専用のプロンプトを生成"""
+        instructions = []
+        for key in fields:
+            info = mapping_dict.get(key, {})
+            line = f"- {key}"
+            if "options" in info and info["options"]:
+                opts = "、".join(info["options"])
+                line += f" (選択肢: {opts})"
+            instructions.append(line)
+        
+        fields_str = "\n".join(instructions)
+        
+        return f"""
+あなたはベテランの認定調査員・ケアマネージャーです。
+今回は**「{phase_name}」**に関する情報のみを抽出してください。
+
+## 抽出対象項目
+以下のリストにある項目についてのみ、情報を見つけてください。
+リストにない情報は無視してください。
+
+{fields_str}
 
 ## 出力形式
-以下のキーを持つフラットなJSON形式で出力してください。
-キー名は「抽出項目リスト」の名称と完全に一致させてください。
-
-```json
-{{
-  "項目名1": "値1",
-  "項目名2": "値2",
-  ...
-}}
-```
-
-## 抽出ルール
-1. **選択肢がある項目**: 必ず提示された選択肢の中から最も適切なものを選んでください。
-2. **情報の不在**: 情報が見つからない項目は、空文字 "" または "（空白）" としてください。
-3. **推測の禁止**: 明確な根拠がない場合は無理に埋めず、空白にしてください。
-4. **統合**: 複数のファイル（例：音声とPDF）にまたがる情報は、矛盾がないように統合してください。
-
-## 抽出項目リスト
-{fields_str}
+JSON形式で、上記リストの項目名をキーとして出力してください。
+値が見つからない場合は空文字 "" にしてください。
 """
-        return prompt
 
     def extract_assessment_info(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
-        """アセスメント情報を抽出（音声/PDF/画像対応、複数ファイル統合、動的プロンプト）"""
-        prompt = self._generate_assessment_prompt()
-        return self._run_analysis(file_contents, prompt)
+        """アセスメント情報を4段階で抽出して統合"""
+        
+        # 1. 準備：マッピング読み込みとグループ化
+        full_mapping = self._load_all_mappings()
+        all_keys = list(full_mapping.keys())
+        field_groups = self._categorize_fields(all_keys)
+        phase_names = [
+            "基本情報・社会基盤（氏名、住所、家族、認定情報など）",
+            "医療・経歴（病歴、受診状況、生活歴など）",
+            "心身機能・精神状態（麻痺、感覚、認知症、BPSDなど）",
+            "生活・活動・参加（ADL、IADL、社会参加、サービス利用など）"
+        ]
+
+        master_result = {}
+        
+        # 2. ファイルアップロード（1回のみ）
+        uploaded_files, tmp_paths = self._upload_files_to_gemini(file_contents)
+        
+        try:
+            # 3. 4段階の抽出実行
+            for i, fields in enumerate(field_groups):
+                if not fields:
+                    continue
+                
+                print(f"DEBUG: Starting Assessment Phase {i+1}/4: {phase_names[i]} ({len(fields)} fields)", flush=True)
+                
+                # プロンプト生成
+                prompt = self._generate_partial_prompt(fields, full_mapping, phase_names[i])
+                
+                # API実行
+                try:
+                    # _generate_with_retry はモデル取得も内部でやるので再利用可
+                    response = self._generate_with_retry([*uploaded_files, prompt])
+                    partial_result = self._parse_json_result(response.text)
+                    
+                    # 結果をマージ
+                    if isinstance(partial_result, dict):
+                        master_result.update(partial_result)
+                        print(f"DEBUG: Phase {i+1} completed. Merged {len(partial_result)} keys.", flush=True)
+                    else:
+                        print(f"WARNING: Phase {i+1} returned non-dict result: {type(partial_result)}", flush=True)
+                        
+                except Exception as e:
+                    print(f"ERROR: Phase {i+1} failed: {e}", flush=True)
+                    # 1つのフェーズが失敗しても他は続ける（部分的成功を目指す）
+            
+            return master_result
+
+        finally:
+            # 4. クリーンアップ
+            self._cleanup_files(uploaded_files, tmp_paths)
 
     # 互換性のために残す（中身は新メソッド呼出）
     def extract_from_pdf(self, pdf_data: bytes, mime_type: str) -> Dict[str, Any]:
