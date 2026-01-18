@@ -17,8 +17,9 @@ from services.ai_service import AIService
 from services.sheets_service import SheetsService
 from services.storage_service import StorageService
 from services.drive_service import drive_service
+import io
 from services.csv_service import csv_service
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 
 app = FastAPI(
     title="Kakanai API",

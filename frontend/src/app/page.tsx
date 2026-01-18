@@ -344,7 +344,7 @@ export default function Home() {
         setResultUrl(writeResult.data?.sheet_url as string);
 
         if (writeResult.data?.sheet_url) {
-          window.open(writeResult.data.sheet_url as string, '_blank');
+          // window.open(writeResult.data.sheet_url as string, '_blank');
         }
       } else {
         throw new Error(writeResult.error || "書き込み失敗");
