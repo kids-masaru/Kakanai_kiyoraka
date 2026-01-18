@@ -498,9 +498,9 @@ export default function Home() {
         {/* Header */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="flex flex-col items-center justify-center gap-0.5">
+            <div className="flex items-center gap-2">
               <img src="/icon.jpg" alt="カカナイ" className="w-8 h-8 rounded-lg" />
-              <h1 className="text-[10px] font-bold text-gray-900 leading-none">介護DX/カカナイ</h1>
+              <h1 className="text-lg font-bold text-gray-900">カカナイ</h1>
             </div>
             <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar w-full md:w-auto">
               <Link href="/genogram" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">ジェノグラム</Link>
