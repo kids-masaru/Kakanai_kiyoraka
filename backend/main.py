@@ -309,11 +309,31 @@ async def write_to_sheets(request: SheetsWriteRequest):
         elif request.write_mode == "append":
             # 行追加モード（会議用）
             if request.meeting_type == "service_meeting":
-                result = sheets_service.write_service_meeting_to_row(
+                # 1. 既存のマスタシートへ行追加
+                append_result = sheets_service.write_service_meeting_to_row(
                     spreadsheet_id=request.spreadsheet_id,
                     data_dict=request.data,
                     sheet_name=request.sheet_name or "貼り付け用"
                 )
+                
+                # 2. 個別ファイルの新規作成 (New Feature)
+                # request.spreadsheet_id passed as the template ID (base spreadsheet)
+                create_result = {}
+                try:
+                    create_result = sheets_service.create_and_write_service_meeting(
+                        template_id=request.spreadsheet_id,
+                        data=request.data
+                    )
+                except Exception as e:
+                    print(f"ERROR: Failed to create individual service meeting file: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+                # 結果の統合
+                result = append_result
+                if create_result.get("success"):
+                    # 個別ファイルが作成できた場合は、そのURLを優先して返す (ユーザーがすぐ開けるように)
+                    result["sheet_url"] = create_result.get("sheet_url")
             elif request.meeting_type == "management_meeting":
                 # 1. 既存のマスタシートへ行追加
                 append_result = sheets_service.write_management_meeting_to_row(
