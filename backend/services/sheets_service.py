@@ -680,11 +680,22 @@ class SheetsService:
             headers = [c.value for c in header_range]
             
             attendance_updates = []
+            # 参加者文字列をリスト化 (カンマ区切り)
             attendees_str = participants.replace("、", ",").replace("　", "")
+            attendee_list = [a.strip() for a in attendees_str.split(",") if a.strip()]
             
             for i, name in enumerate(headers):
                 if not name: continue
-                if name in attendees_str:
+                # マッチングロジック修正: 
+                # ヘッダー名(例:武島由幸)の中に、入力された名前(例:武島)が含まれているか
+                # または逆 (入力:武島由幸, ヘッダー:武島) も考慮
+                is_attending = False
+                for att in attendee_list:
+                    if att in name or name in att:
+                        is_attending = True
+                        break
+                
+                if is_attending:
                     attendance_updates.append({'row': 9, 'col': 1 + i, 'val': "〇"})
                 else:
                     attendance_updates.append({'row': 9, 'col': 1 + i, 'val': "✕"})
