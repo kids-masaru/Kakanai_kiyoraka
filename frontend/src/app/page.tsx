@@ -509,20 +509,26 @@ export default function Home() {
       <div className="flex-1">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="flex flex-col items-center justify-center gap-0 w-auto">
+          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+            {/* Left: Logo (Fixed) */}
+            <div className="flex flex-col items-center justify-center gap-0 w-auto flex-shrink-0">
               <img src="/icon.jpg" alt="カカナイ" className="w-8 h-8 rounded-lg" />
               <h1 className="text-[10px] font-bold text-gray-900 leading-none mt-0.5 whitespace-nowrap">カカナイ</h1>
             </div>
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar w-full md:w-auto">
-              <Link href="/genogram" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">ジェノグラム</Link>
-              <Link href="/body-map" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">身体図</Link>
-              <Link href="/house-plan" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">家屋図</Link>
-              <button onClick={() => alert('CSV変換機能は現在開発中です')} className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex items-center gap-1">
+
+            {/* Center: Tools (Scrollable) */}
+            <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar min-w-0 px-1">
+              <Link href="/genogram" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">ジェノグラム</Link>
+              <Link href="/body-map" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">身体図</Link>
+              <Link href="/house-plan" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">家屋図</Link>
+              <button onClick={() => alert('CSV変換機能は現在開発中です')} className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex items-center gap-1 flex-shrink-0">
                 <FileTextIcon className="w-3 h-3" />
                 <span>CSV変換</span>
               </button>
-              <div className="mx-1 h-5 w-px bg-gray-200"></div>
+            </div>
+
+            {/* Right: System (Fixed) */}
+            <div className="flex items-center gap-1 flex-shrink-0 border-l border-gray-200 pl-2">
               <button onClick={() => alert('マニュアルを確認できます')} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 flex-shrink-0" title="マニュアル">
                 <BookOpenIcon />
               </button>
