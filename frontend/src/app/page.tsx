@@ -449,8 +449,20 @@ export default function Home() {
     }
   };
 
+  // Helper for Theme Colors
+  const getThemeColor = (type: DocumentType) => {
+    switch (type) {
+      case "assessment": return { base: "green", bg: "bg-green-50", text: "text-green-700", border: "border-green-200", btn: "bg-green-600 hover:bg-green-700", btnLight: "bg-green-100 text-green-700" };
+      case "service_meeting": return { base: "orange", bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", btn: "bg-orange-500 hover:bg-orange-600", btnLight: "bg-orange-100 text-orange-700" };
+      case "management_meeting": return { base: "blue", bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", btn: "bg-blue-600 hover:bg-blue-700", btnLight: "bg-blue-100 text-blue-700" };
+      default: return { base: "blue", bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", btn: "bg-blue-600 hover:bg-blue-700", btnLight: "bg-blue-100 text-blue-700" };
+    }
+  };
+
+  const theme = getThemeColor(selectedType);
+
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className={`min-h-screen flex transition-colors duration-500 ${theme.bg}`}>
       {/* Settings Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-xl transform transition-transform duration-300 ${showSettings ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -466,11 +478,7 @@ export default function Home() {
               {geminiModels.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">アセスメントシートID</label>
-            <p className="text-xs text-gray-500 mb-1">※新規作成モードのため現在は使用されません</p>
-            <input type="text" value={settings.assessmentSheetId} onChange={(e) => setSettings({ ...settings, assessmentSheetId: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-xs" />
-          </div>
+          {/* Assessment ID Removed */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">サービス担当者会議ID</label>
             <input type="text" value={settings.serviceMeetingSheetId} onChange={(e) => setSettings({ ...settings, serviceMeetingSheetId: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-xs" />
@@ -495,14 +503,15 @@ export default function Home() {
               <h1 className="text-lg font-bold text-gray-900">介護DX カカナイ</h1>
             </div>
             <div className="flex items-center gap-2">
-              <Link href="/genogram" className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">ジェノグラム</Link>
-              <Link href="/body-map" className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">身体図</Link>
-              <Link href="/house-plan" className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">家屋図</Link>
+
+              <Link href="/genogram" className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">ジェノグラム</Link>
+              <Link href="/body-map" className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">身体図</Link>
+              <Link href="/house-plan" className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">家屋図</Link>
               <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 ml-2" title="設定">
                 <SettingsIcon />
               </button>
+
             </div>
-          </div>
         </header>
 
         {/* Main */}
@@ -511,18 +520,22 @@ export default function Home() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 mb-4">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-gray-700 mr-2">作成:</span>
-              {documentTypes.map((type) => (
-                <button
-                  key={type.value}
-                  onClick={() => setSelectedType(type.value)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedType === type.value
-                    ? "bg-blue-500 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                >
-                  {type.label}
-                </button>
-              ))}
+              {documentTypes.map((type) => {
+                const typeTheme = getThemeColor(type.value);
+                const isActive = selectedType === type.value;
+                return (
+                  <button
+                    key={type.value}
+                    onClick={() => setSelectedType(type.value)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all mr-2 last:mr-0 ${isActive
+                      ? `${typeTheme.btn} text-white shadow-md`
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                  >
+                    {type.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -588,7 +601,7 @@ export default function Home() {
               <button
                 onClick={handleProcess}
                 disabled={isProcessing || files.length === 0}
-                className="flex-1 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex justify-center items-center gap-2"
+                className={`flex-1 py-3 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex justify-center items-center gap-2 ${theme.btn}`}
               >
                 {isProcessing ? (
                   <>
