@@ -361,8 +361,10 @@ async def write_to_sheets(request: SheetsWriteRequest):
                 if request.staff_name:
                     request.data["担当者名"] = request.staff_name
                 if request.meeting_count:
-                    # 数値のみの場合は「第X回」等の加工はせずそのまま渡す（数式で整形されるか、またはそのまま表示）
-                    request.data["開催回数"] = request.meeting_count
+                    # 数値のみ抽出（「第6回」→「6」）
+                    # "第"と"回"を除去するシンプルな実装
+                    clean_count = request.meeting_count.replace("第", "").replace("回", "")
+                    request.data["開催回数"] = clean_count
                 
                 # 1. 既存のマスタシートへ行追加
                 append_result = sheets_service.write_service_meeting_to_row(
