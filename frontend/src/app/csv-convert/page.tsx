@@ -36,11 +36,42 @@ export default function CsvConvertPage() {
     const [errorMsg, setErrorMsg] = useState("");
     const [successMsg, setSuccessMsg] = useState("");
 
+    const [isDragging, setIsDragging] = useState(false);
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             setFile(e.target.files[0]);
             setErrorMsg("");
             setSuccessMsg("");
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            const droppedFile = e.dataTransfer.files[0];
+            if (droppedFile.name.endsWith('.csv')) {
+                setFile(droppedFile);
+                setErrorMsg("");
+                setSuccessMsg("");
+            } else {
+                setErrorMsg("CSVファイルのみ対応しています");
+            }
         }
     };
 
@@ -72,11 +103,19 @@ export default function CsvConvertPage() {
             a.href = url;
 
             // Get filename from header or fallback
+            // Note: Decoding already matches UTF-8'' encoded filename
             const contentDisposition = response.headers.get("Content-Disposition");
             let filename = "converted.xlsx";
             if (contentDisposition) {
-                const match = contentDisposition.match(/filename=(.+)/);
-                if (match && match[1]) filename = match[1];
+                // Try star encoding first (RFC 5987)
+                const matchStar = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
+                if (matchStar && matchStar[1]) {
+                    filename = decodeURIComponent(matchStar[1]);
+                } else {
+                    // Fallback to normal filename
+                    const match = contentDisposition.match(/filename="?([^";]+)"?/);
+                    if (match && match[1]) filename = match[1];
+                }
             }
 
             a.download = filename;
@@ -107,7 +146,12 @@ export default function CsvConvertPage() {
                         CSVファイルをアップロードすると、所定のExcelテンプレートにデータを貼り付けて出力します。
                     </p>
 
-                    <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${file ? 'border-blue-500 bg-blue-50' : 'border-blue-200 hover:border-blue-400 hover:bg-gray-50'}`}>
+                    <div
+                        className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${file ? 'border-blue-500 bg-blue-50' : isDragging ? 'border-blue-500 bg-blue-50' : 'border-blue-200 hover:border-blue-400 hover:bg-gray-50'}`}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                    >
                         <input
                             type="file"
                             accept=".csv"
@@ -134,8 +178,8 @@ export default function CsvConvertPage() {
                         ) : (
                             <label htmlFor="csv-upload" className="flex flex-col items-center cursor-pointer">
                                 <UploadIcon />
-                                <span className="text-base font-medium text-gray-700 mb-1">CSVファイルをアップロード</span>
-                                <span className="text-xs text-gray-400">クリックしてファイルを選択</span>
+                                <span className="text-base font-medium text-gray-700 mb-1">{isDragging ? 'ここにドロップ' : 'CSVファイルをアップロード'}</span>
+                                <span className="text-xs text-gray-400">クリックしてファイルを選択 または ドラッグ&ドロップ</span>
                             </label>
                         )}
                     </div>

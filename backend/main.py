@@ -498,18 +498,27 @@ async def convert_csv(file: UploadFile = File(...)):
     """CSVをExcelに変換"""
     try:
         content = await file.read()
-        excel_bytes, filename_or_error = csv_service.convert_csv_to_excel(content, file.filename)
         
-        if excel_bytes is None:
-            raise HTTPException(status_code=400, detail=filename_or_error)
-            
-        return Response(
-            content=excel_bytes,
+        # サービスの呼び出し
+        # 戻り値は (excel_binary, output_filename)
+        excel_data, filename = csv_service.convert_csv_to_excel(content, file.filename)
+        
+        # 日本語ファイル名対応 (URLエンコード)
+        from urllib.parse import quote
+        encoded_filename = quote(filename)
+        
+        # StreamingResponseで返す
+        return StreamingResponse(
+            io.BytesIO(excel_data),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename={filename_or_error}"}
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+            }
         )
+
     except Exception as e:
-        print(f"ERROR: CSV convert failed: {e}")
+        print(f"ERROR: CSV convert failed: {e}", flush=True)
+        # traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
