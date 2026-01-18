@@ -512,6 +512,7 @@ export default function Home() {
               </button>
 
             </div>
+          </div>
         </header>
 
         {/* Main */}
