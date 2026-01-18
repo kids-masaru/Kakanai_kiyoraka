@@ -268,6 +268,30 @@ export default function Home() {
       if (selectedType === "management_meeting") meetingParticipants = managementForm.参加者;
       if (selectedType === "service_meeting") meetingParticipants = serviceForm.担当者名;
 
+      // Extract additional fields for Service Meeting
+      const userName = selectedType === "service_meeting" ? serviceForm.利用者名 : "";
+      const staffName = selectedType === "service_meeting" ? serviceForm.担当者名 : "";
+      const meetingCount = selectedType === "service_meeting" ? serviceForm.開催回数 : "";
+
+      // Extract additional fields for Assessment Sheet
+      const consultantName = selectedType === "assessment" ? assessmentForm.相談者氏名 : "";
+      const assessmentReason = selectedType === "assessment" ? assessmentForm.アセスメント理由 : "";
+      const relationship = selectedType === "assessment" ? assessmentForm.続柄 : "";
+      const assessmentPlace = selectedType === "assessment" ? assessmentForm.実施場所 : "";
+      const receptionMethod = selectedType === "assessment" ? assessmentForm.受付方法 : "";
+
+      // Note: "user_name" for assessment might come from the form too? 
+      // The current form structure puts "Consultant Name" but usually Assessment involves a Target User.
+      // However, looking at the interface, assessmentForm only has "相談者氏名" (Consultant/Applicant).
+      // wait, "利用者情報_氏名_漢字" is usually extracted or input.
+      // Let's rely on what's available. If "user name" is needed for assessment file naming,
+      // the backend Logic for create_and_write_assessment looks for "利用者情報_氏名_漢字" or "氏名".
+      // We will map consultantName to consultant_name.
+      // If there is no specific field for "Target User Name" in the Assessment Form (UI), we can't send it yet.
+      // Checking lines 109-117 (step 2343): assessmentForm has: 受付対応者, アセスメント理由, 相談者氏名, 続柄, 実施場所, 受付方法.
+      // It DOES NOT have "利用者名" (Target User Name). 
+      // So we will just pass what we have.
+
       const writeResult = await writeToSheets(
         getCurrentSpreadsheetId(),
         "",
@@ -278,7 +302,15 @@ export default function Home() {
         meetingDate,
         meetingTime,
         meetingPlace,
-        meetingParticipants
+        meetingParticipants,
+        userName,
+        staffName,
+        meetingCount,
+        consultantName,
+        assessmentReason,
+        relationship,
+        assessmentPlace,
+        receptionMethod
       );
 
       if (writeResult.success) {

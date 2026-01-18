@@ -88,6 +88,12 @@ class SheetsWriteRequest(BaseModel):
     user_name: str = ""
     staff_name: str = ""
     meeting_count: str = ""
+    # アセスメントシート用の追加フィールド
+    consultant_name: str = ""      # 相談者氏名
+    assessment_reason: str = ""    # アセスメント理由
+    relationship: str = ""         # 続柄
+    assessment_place: str = ""     # 実施場所
+    reception_method: str = ""     # 受付方法
 
 
 class GenogramRequest(BaseModel):
@@ -297,6 +303,28 @@ async def write_to_sheets(request: SheetsWriteRequest):
                     success=False, 
                     error="Assessment Template ID or Folder ID not configured in backend variables."
                 )
+
+            # --- 手入力データの優先適用 (アセスメントシート) ---
+            if not request.data:
+                request.data = {}
+            
+            if request.consultant_name:
+                request.data["相談者氏名"] = request.consultant_name
+            if request.assessment_reason:
+                request.data["アセスメント理由"] = request.assessment_reason
+            if request.relationship:
+                request.data["続柄"] = request.relationship
+            if request.assessment_place:
+                request.data["実施場所"] = request.assessment_place
+            if request.reception_method:
+                request.data["受付方法"] = request.reception_method
+            
+            # 注: アプリフォームから「利用者名(相談対象者)」が送られてくるフィールドがあるか確認が必要
+            # もし request.user_name がアセスメントでも使われるならここでマッピングする
+            if request.user_name:
+                 # マッピング定義に従い「利用者情報_氏名_漢字」や「基本情報.氏名」に入れるべきだが
+                 # create_and_write_assessment は data_dict["利用者情報_氏名_漢字"] や data_dict["氏名"] を見る
+                 request.data["利用者情報_氏名_漢字"] = request.user_name
 
             result = sheets_service.create_and_write_assessment(
                 template_id=template_id,

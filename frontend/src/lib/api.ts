@@ -171,7 +171,17 @@ export async function writeToSheets(
     meetingDate: string = '',
     meetingTime: string = '',
     meetingPlace: string = '',
-    meetingParticipants: string = ''
+    meetingParticipants: string = '',
+    // New fields for Service Meeting
+    userName: string = '',
+    staffName: string = '',
+    meetingCount: string = '',
+    // New fields for Assessment Sheet
+    consultantName: string = '',
+    assessmentReason: string = '',
+    relationship: string = '',
+    assessmentPlace: string = '',
+    receptionMethod: string = ''
 ): Promise<AnalyzeResponse> {
     const response = await fetch(`${API_BASE_URL}/api/sheets/write`, {
         method: 'POST',
@@ -188,7 +198,16 @@ export async function writeToSheets(
             date_str: meetingDate,
             time_str: meetingTime,
             place: meetingPlace,
-            participants: meetingParticipants
+            participants: meetingParticipants,
+            // New fields
+            user_name: userName,
+            staff_name: staffName,
+            meeting_count: meetingCount,
+            consultant_name: consultantName,
+            assessment_reason: assessmentReason,
+            relationship: relationship,
+            assessment_place: assessmentPlace,
+            reception_method: receptionMethod
         }),
     });
 
