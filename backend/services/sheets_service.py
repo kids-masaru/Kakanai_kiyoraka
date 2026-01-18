@@ -833,3 +833,172 @@ class SheetsService:
             import traceback
             traceback.print_exc()
             return {"success": False, "error": f"シート作成完了、書き込み失敗: {str(e)}", "sheet_url": new_url}
+
+    def create_and_write_service_meeting(
+        self,
+        template_id: str,
+        data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        サービス担当者会議議事録を新規作成して直接書き込み
+        方針:
+        1. 指定フォルダに空のシート作成
+        2. 原本「４表（会議録）」のみコピー
+        3. 値書き込み（数式上書き・プルダウン解除）
+        """
+        print(f"DEBUG: create_and_write_service_meeting called", flush=True)
+        from .drive_service import drive_service
+        import datetime
+        import gspread.utils
+        
+        # 0. ターゲットフォルダID（ユーザー指定の固定ID）
+        target_folder_id = "1nQ2RhVQPaKCnG6L04yP6rQdcheT230_C"
+        
+        # 1. データ準備 extraction
+        # 日付
+        raw_date = data.get("開催日", "")
+        # 日付オブジェクト変換 (YYYYMMDD用)
+        dt_obj = datetime.datetime.now()
+        if raw_date:
+            try:
+                # "2026年01月14日" or "2026-01-14" format handling
+                clean_date = raw_date.replace("年", "-").replace("月", "-").replace("日", "")
+                # 時間が入っている場合がある "2026-01-14 10:00"
+                clean_date = clean_date.split(" ")[0]
+                
+                if clean_date.count("-") == 2:
+                     dt_obj = datetime.datetime.strptime(clean_date, "%Y-%m-%d")
+            except:
+                pass
+        
+        file_date_str = dt_obj.strftime("%Y%m%d")
+        
+        # 利用者名
+        user_name = data.get("利用者名", "")
+        name_suffix = f"【{user_name}】" if user_name else ""
+        
+        # ファイル名: YYYYMMDD_会議録【利用者名】
+        new_filename = f"{file_date_str}_会議録{name_suffix}"
+        
+        # 2. 空のスプレッドシート作成
+        print(f"DEBUG: Creating empty spreadsheet '{new_filename}' in folder {target_folder_id}", flush=True)
+        new_id, new_url = drive_service.create_empty_spreadsheet(new_filename, target_folder_id)
+        
+        if not new_id:
+            return {"success": False, "error": "スプレッドシートの作成に失敗しました"}
+            
+        try:
+            if not self.client:
+                raise ValueError("Google Sheets client not initialized")
+            
+            # --- シートコピー処理 ---
+            
+            # Master(Template)を開く
+            master_ss = self.client.open_by_key(template_id)
+            try:
+                template_sheet = master_ss.worksheet("４表（会議録）")
+            except:
+                print("Error: '４表（会議録）' sheet not found in master spreadsheet.")
+                return {"success": False, "error": "テンプレートに「４表（会議録）」シートが見つかりません"}
+            
+            # 新しいスプレッドシートを開く
+            new_ss = self.client.open_by_key(new_id)
+            
+            # テンプレートシートを新しいスプレッドシートにコピー
+            print("DEBUG: Copying '４表（会議録）' sheet to new spreadsheet...", flush=True)
+            template_sheet.copy_to(new_id)
+            
+            # 新しいスプレッドシートのシート一覧を取得 Refresh
+            all_sheets = new_ss.worksheets()
+            copied_sheet = all_sheets[-1] # 最後に追加されたシート
+            
+            # コピーしたシートの名前を変更 (YYYYMMDD_会議録...)
+            final_sheet_name = f"{file_date_str}_会議録{name_suffix}"
+            copied_sheet.update_title(final_sheet_name)
+            
+            # デフォルトの「シート1」を削除
+            default_sheet = all_sheets[0]
+            if default_sheet.title != final_sheet_name:
+                new_ss.del_worksheet(default_sheet)
+                
+            worksheet = copied_sheet
+            
+            # --- 書き込みデータの準備 ---
+            
+            # 和暦変換 for G5, H5
+            jp_date_str = self._to_japanese_calendar(dt_obj)
+            
+            # 各フィールドの値
+            val_place = data.get("開催場所", "")
+            val_time = data.get("開催時間", "")
+            val_count = data.get("開催回数", "")
+            val_staff = data.get("担当者名", "")
+            val_user = data.get("利用者名", "")
+            
+            val_item = data.get("検討した項目", "")
+            val_content = data.get("検討内容", "")
+            val_conclusion = data.get("結論", "")
+            
+            updates = []
+            
+            # 1. G5, H5: 日付 (和暦)
+            updates.append({'range': 'G5', 'values': [[jp_date_str]]})
+            updates.append({'range': 'H5', 'values': [[jp_date_str]]})
+            
+            # 2. Z5: 開催場所
+            updates.append({'range': 'Z5', 'values': [[val_place]]})
+            
+            # 3. AO5: 開催時間
+            updates.append({'range': 'AO5', 'values': [[val_time]]})
+            
+            # 4. BG5: 開催回数
+            updates.append({'range': 'BG5', 'values': [[val_count]]})
+            
+            # 5. BF4: 担当者名
+            updates.append({'range': 'BF4', 'values': [[val_staff]]})
+            
+            # 6. E4: 利用者名
+            updates.append({'range': 'E4', 'values': [[val_user]]})
+            
+            # 7. その他の内容 (H11, H14, H24)
+            updates.append({'range': 'H11', 'values': [[val_item]]})
+            updates.append({'range': 'H14', 'values': [[val_content]]})
+            updates.append({'range': 'H24', 'values': [[val_conclusion]]})
+            
+            # Batch Update
+            worksheet.batch_update(updates)
+            
+            # --- 入力規則(プルダウン)の解除 ---
+            # G5, H5, Z5, AO5, BG5, BF4, E4
+            ranges_to_clear_validation = ["G5", "H5", "Z5", "AO5", "BG5", "BF4", "E4"]
+            
+            requests = []
+            
+            for rng in ranges_to_clear_validation:
+                grid_range = gspread.utils.a1_range_to_grid_range(rng, worksheet.id)
+                request = {
+                    "setDataValidation": {
+                        "range": grid_range,
+                        "rule": None # None to clear
+                    }
+                }
+                requests.append(request)
+            
+            if requests:
+                print("DEBUG: Clearing data validations...", flush=True)
+                new_ss.batch_update({"requests": requests})
+
+            print(f"DEBUG: Successfully populated service meeting sheet: {new_filename}", flush=True)
+            
+            return {
+                "success": True,
+                "sheet_url": new_url,
+                "write_count": 1,
+                "spreadsheet_id": new_id
+            }
+            
+        except Exception as e:
+            print(f"ERROR: create_and_write_service_meeting failed: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e), "sheet_url": new_url}
