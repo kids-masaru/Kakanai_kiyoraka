@@ -315,7 +315,8 @@ async def write_to_sheets(request: SheetsWriteRequest):
                     sheet_name=request.sheet_name or "貼り付け用"
                 )
             elif request.meeting_type == "management_meeting":
-                result = sheets_service.write_management_meeting_to_row(
+                # 1. 既存のマスタシートへ行追加
+                append_result = sheets_service.write_management_meeting_to_row(
                     spreadsheet_id=request.spreadsheet_id,
                     data=request.data,
                     date_str=request.date_str,
@@ -324,6 +325,32 @@ async def write_to_sheets(request: SheetsWriteRequest):
                     participants=request.participants,
                     sheet_name=request.sheet_name or "貼り付け用"
                 )
+                
+                # 2. 個別ファイルの新規作成（アセスメントシート方式）
+                folder_id = drive_service.get_folder_id_by_type("management_meeting")
+                create_result = {}
+                
+                if folder_id:
+                    print(f"DEBUG: Creating separate management meeting file in folder {folder_id}", flush=True)
+                    create_result = sheets_service.create_and_write_management_meeting(
+                        template_id=request.spreadsheet_id, # マスタシートをテンプレートとして使用
+                        folder_id=folder_id,
+                        data=request.data,
+                        date_str=request.date_str,
+                        time_str=request.time_str,
+                        place=request.place,
+                        participants=request.participants
+                    )
+                else:
+                    print("DEBUG: No management meeting folder ID configured, skipping individual file creation", flush=True)
+
+                # 結果の統合（個別ファイル作成が成功していれば、そのURLを優先して返す）
+                result = append_result
+                if create_result.get("success"):
+                    result["sheet_url"] = create_result.get("sheet_url")
+                    result["individual_file_created"] = True
+                    result["individual_file_id"] = create_result.get("spreadsheet_id")
+                    print(f"DEBUG: Returned URL updated to new file: {result['sheet_url']}", flush=True)
             else:
                 result = sheets_service.write_service_meeting_to_row(
                     spreadsheet_id=request.spreadsheet_id,

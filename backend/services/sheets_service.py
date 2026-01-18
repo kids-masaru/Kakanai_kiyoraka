@@ -559,4 +559,222 @@ class SheetsService:
             }
         except Exception as e:
             print(f"ERROR: Failed to write to new spreadsheet: {e}")
+            import traceback
+            traceback.print_exc()
             return {"success": False, "error": f"シート作成は成功しましたが書き込みに失敗: {str(e)}", "sheet_url": new_url}
+
+    def create_and_write_management_meeting(
+        self,
+        template_id: str,
+        folder_id: str,
+        data: Dict[str, Any],
+        date_str: str,
+        time_str: str,
+        place: str,
+        participants: str
+    ) -> Dict[str, Any]:
+        """
+        運営会議議事録を新規作成して直接書き込み（GAS代替）
+        """
+        print(f"DEBUG: create_and_write_management_meeting called", flush=True)
+        from .drive_service import drive_service
+        import datetime
+        import re
+        
+        # 1. ファイル名・日付の準備
+        # date_str: "2026-01-18" -> "20260118"
+        raw_date = date_str if date_str else datetime.datetime.now().strftime("%Y-%m-%d")
+        file_date_str = raw_date.replace("-", "").replace("/", "")
+        
+        # タイトル: YYYYMMDD_運営会議
+        new_filename = f"{file_date_str}_運営会議"
+        
+        # テンプレートコピー
+        print(f"DEBUG: Copying template {template_id} to folder {folder_id}", flush=True)
+        new_id, new_url = drive_service.copy_spreadsheet(template_id, new_filename, folder_id)
+        
+        if not new_id:
+            return {"success": False, "error": "スプレッドシートの作成に失敗しました"}
+            
+        try:
+            # クライアント初期化チェック
+            if not self.client:
+                raise ValueError("Google Sheets client not initialized")
+                
+            spreadsheet = self.client.open_by_key(new_id)
+            # 原本シートを取得（テンプレートコピーなので「原本」という名前のはずだが、copy時は「原本 のコピー」になるかも？
+            # 通常Apps Scriptのfile.makeCopyなら同じ名前。Drive APIのcopyも同じはずだが、
+            # シート名は変わらないはず。念のため取得。
+            try:
+                # テンプレートのシート名が「原本」であることを前提
+                worksheet = spreadsheet.worksheet("原本")
+            except:
+                # なければ先頭
+                worksheet = spreadsheet.sheet1
+                
+            # --- 書き込みデータの準備 ---
+            
+            # 1. 日付・場所
+            # C3: 日付 (令和表記などが望ましいが、一旦YYYY年MM月DD日 HH:MM〜HH:MM形式で構築)
+            mtg_date_val = f"{date_str} {time_str}".strip()
+            # C4: 場所
+            mtg_place_val = place
+            
+            # 2. 参加者判定 (A7:E7のヘッダーを読み取ってA9:E9に〇✕)
+            # まずヘッダーを読む
+            header_range = worksheet.range('A7:H7') # 少し広めに
+            headers = [c.value for c in header_range]
+            
+            attendance_updates = []
+            # 参加者文字列（カンマ区切りなどを想定）
+            attendees_str = participants.replace("、", ",").replace("　", "")
+            
+            for i, name in enumerate(headers):
+                if not name: continue
+                # 名前が含まれているか部分一致チェック
+                if name in attendees_str:
+                    # A9は row=9, col=1+i
+                    attendance_updates.append({'row': 9, 'col': 1 + i, 'val': "〇"})
+                else:
+                    attendance_updates.append({'row': 9, 'col': 1 + i, 'val': "✕"})
+            
+            # 3. 議題チェックボックス (A13:A19のテキストを読んでI13:I19に☑/□)
+            agenda_range = worksheet.range('A13:A19')
+            agenda_texts = [c.value for c in agenda_range]
+            
+            agenda_updates = []
+            ai_agenda = data.get("agenda", "")
+            
+            for i, text in enumerate(agenda_texts):
+                if not text: continue
+                # GASロジック: text + "●" がAI生成テキストに含まれていればON
+                # ただしAI生成も揺らぎがあるので、単純に "①..." という番号で照合する手もあるが、
+                # ここではcare-dx-app準拠でいくか、あるいはAIが "●" をつけている前提でいくか。
+                # ユーザーのAIプロンプトは "行末に「●」を付けてください" となっているので
+                # 「項目名 + ●」が含まれているかチェックするのが確実。
+                
+                # テキストから余計な空白除去
+                clean_text = text.strip()
+                search_key = clean_text + "●"
+                
+                # I列は col=9. 行は 13 + i
+                if search_key in ai_agenda:
+                    agenda_updates.append({'row': 13 + i, 'col': 9, 'val': "☑"})
+                else:
+                    agenda_updates.append({'row': 13 + i, 'col': 9, 'val': "□"})
+
+            # 4. 24時間対応 (A23:C27)
+            # AIは "support_24h" にテキストで返してくる。
+            # プロンプト仕様: extractInfo logicが必要。
+            # GASロジック: "日時①：...", "対応者①：..." のように入っている前提だが、
+            # AIプロンプトの出力形式修正が必要かも？
+            # 現在のAIプロンプト(main.py/ai_service.py)を見ると、
+            # support_24h: "12/5 18:00 佐藤対応: ..." のようにフリーテキストで来ている可能性が高い。
+            # GASは "日時①：" などを探しているが、AI出力がそれに準拠していないと空欄になる。
+            # ★今回はAI出力を「そのまま」よしなに埋めるか、GAS同様のparseを試みるか。
+            # ユーザーのAI Instructionには `5. "support_24h" (24時間対応)` としか書いておらず、フォーマット指定が弱い。
+            # しかし、ユーザーは「うまくいきました」と言っているので、現状のappend行には正しく入っている？
+            # append行には `val_24h` がそのまま入るだけ。
+            # ここでは「表」に埋める必要がある。
+            # 簡易パース: 改行で行ごとに埋める、あるいは①などが含まれていればそれを使う。
+            
+            support_updates = []
+            raw_24h = data.get("support_24h", "")
+            
+            # 丸数字 ①~⑤ で分割を試みる
+            circles = ["①", "②", "③", "④", "⑤"]
+            
+            # もし丸数字が含まれていなければ、各行にそのまま書く（最大5行）
+            has_circles = any(c in raw_24h for c in circles)
+            
+            if has_circles:
+                 for i, mark in enumerate(circles):
+                    if mark in raw_24h:
+                        # 単純化: マークから次の改行までを取得して「内容」に入れる（日時・対応者の分離は困難ならC列へ）
+                        # ユーザー指示: 日付=A, 対応者=B, 内容=C
+                        # AIが綺麗に分離して出していない場合、C列にまとめて書くのが安全。
+                        # パースを試みる
+                        # パターン: "①10/30 佐藤: 内容..."
+                        
+                        target_row = 23 + i
+                        
+                        # その行のテキストを抽出
+                        start = raw_24h.find(mark)
+                        end = raw_24h.find("\n", start)
+                        if end == -1: end = len(raw_24h)
+                        line_text = raw_24h[start:end].replace(mark, "").strip()
+                        
+                        # スペースなどで分割トライ
+                        parts = line_text.split(" ", 2)
+                        if len(parts) >= 3:
+                             support_updates.append({'row': target_row, 'col': 1, 'val': parts[0]}) # 日時
+                             support_updates.append({'row': target_row, 'col': 2, 'val': parts[1]}) # 名前
+                             support_updates.append({'row': target_row, 'col': 3, 'val': parts[2]}) # 内容
+                        elif len(parts) == 2:
+                             support_updates.append({'row': target_row, 'col': 1, 'val': parts[0]})
+                             support_updates.append({'row': target_row, 'col': 3, 'val': parts[1]}) # 残り全部内容
+                        else:
+                             support_updates.append({'row': target_row, 'col': 3, 'val': line_text})
+            else:
+                # 丸数字なし。改行で分割して上から埋める
+                lines = raw_24h.split("\n")
+                for i, line in enumerate(lines[:5]): # 最大5行
+                    if not line.strip(): continue
+                    # 分割トライ
+                    parts = line.split(" ", 2)
+                    target_row = 23 + i
+                    if len(parts) >= 3:
+                         support_updates.append({'row': target_row, 'col': 1, 'val': parts[0]}) 
+                         support_updates.append({'row': target_row, 'col': 2, 'val': parts[1]})
+                         support_updates.append({'row': target_row, 'col': 3, 'val': parts[2]})
+                    else:
+                         support_updates.append({'row': target_row, 'col': 3, 'val': line})
+
+            # 5. 共有事項 (A29)
+            # data.get("sharing_matters")
+            shared_info = data.get("sharing_matters", "")
+            
+            # --- Batch Update (セル更新) ---
+            # update_cells は gspread の Cell オブジェクトリストを渡す必要があり面倒なので
+            # update_acell または batch_update (values) を使う
+            
+            updates_batch = []
+            
+            # C3: 日付
+            updates_batch.append({'range': 'C3', 'values': [[mtg_date_val]]})
+            # C4: 場所
+            updates_batch.append({'range': 'C4', 'values': [[mtg_place_val]]})
+            # A29: 共有事項
+            updates_batch.append({'range': 'A29', 'values': [[shared_info]]})
+            
+            # 参加者
+            for item in attendance_updates:
+                cell_addr = gspread.utils.rowcol_to_a1(item['row'], item['col'])
+                updates_batch.append({'range': cell_addr, 'values': [[item['val']]]})
+                
+            # 議題
+            for item in agenda_updates:
+                cell_addr = gspread.utils.rowcol_to_a1(item['row'], item['col'])
+                updates_batch.append({'range': cell_addr, 'values': [[item['val']]]})
+                
+            # 24時間
+            for item in support_updates:
+                cell_addr = gspread.utils.rowcol_to_a1(item['row'], item['col'])
+                updates_batch.append({'range': cell_addr, 'values': [[item['val']]]})
+
+            # 実行
+            worksheet.batch_update(updates_batch)
+            print(f"DEBUG: Successfully populated management meeting sheet: {new_filename}", flush=True)
+
+            return {
+                "success": True,
+                "sheet_url": new_url,
+                "write_count": len(updates_batch),
+                "spreadsheet_id": new_id
+            }
+
+        except Exception as e:
+            print(f"ERROR: Failed to write to management meeting sheet: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": f"シート作成完了、書き込み失敗: {str(e)}", "sheet_url": new_url}
