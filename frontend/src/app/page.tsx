@@ -521,10 +521,10 @@ export default function Home() {
               <Link href="/genogram" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">ジェノグラム</Link>
               <Link href="/body-map" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">身体図</Link>
               <Link href="/house-plan" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">家屋図</Link>
-              <button onClick={() => alert('CSV変換機能は現在開発中です')} className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex items-center gap-1 flex-shrink-0">
+              <Link href="/csv-convert" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex items-center gap-1 flex-shrink-0">
                 <FileTextIcon className="w-3 h-3" />
                 <span>CSV変換</span>
-              </button>
+              </Link>
             </div>
 
             {/* Right: System (Fixed) */}

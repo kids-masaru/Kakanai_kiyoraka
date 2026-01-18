@@ -209,16 +209,18 @@ class AIService:
         g1_keywords = ["作成", "受付", "相談者", "利用者", "家族", "世帯", "住居", "設備", "年金", "保険", "認定", "障害高齢者", "認知症高齢者", "被保険者"]
         # G2: Medical/History
         g2_keywords = ["経緯", "搬送", "これまでの生活", "生活リズム", "健康", "病名", "薬", "受診", "主治医", "医療機関"]
-        # G3: Body/Mind
+        # G3: Body/Mind (Physical Condition, Mental)
         g3_keywords = ["視力", "聴力", "口腔", "栄養", "身長", "体重", "血圧", "アレルギー", "麻痺", "拘縮", "痛み", "褥瘡", "認知機能", "行動障害", "精神", "阻害要因", "体温", "脈拍"]
-        # G4: Physical ADL (Body Movement)
+        # G4: Physical ADL (Basic Movement)
         g4_keywords = ["移動", "食事", "水分", "排泄", "入浴", "更衣", "整容", "寝返り", "起き上がり", "立ち上がり", "座位", "立位", "移乗"]
-        # G5: IADL/Comm (Cognitive Tasks)
-        g5_keywords = ["服薬", "調理", "掃除", "洗濯", "買物", "物品", "金銭", "コミュニケーション", "意思"]
+        # G5: IADL/Comm (Cognitive Tasks, Communication)
+        # Added "指示" for 指示反応
+        g5_keywords = ["服薬", "調理", "掃除", "洗濯", "買物", "物品", "金銭", "コミュニケーション", "意思", "指示"]
         # G6: Services (Specific Service Usage block)
         g6_keywords = ["利用している支援", "社会資源", "フォーマル", "インフォーマル"]
         # G7: Social/Env (Environment & Summary)
-        g7_keywords = ["社会", "役割", "介護力", "支援", "サービス", "留意", "環境因子", "個人因子", "見通し", "住宅改修", "福祉用具", "社会保障"]
+        # Added "参加" explicitly
+        g7_keywords = ["社会", "役割", "介護力", "支援", "サービス", "留意", "環境因子", "個人因子", "見通し", "住宅改修", "福祉用具", "社会保障", "参加"]
 
         used_keys = set()
 
@@ -296,6 +298,23 @@ class AIService:
     def _generate_partial_prompt(self, fields: list[str], mapping_dict: Dict[str, Any], phase_name: str) -> str:
         """指定されたフィールドリスト専用のプロンプトを生成"""
         instructions = []
+        
+        # 特殊処理が必要なフィールドグループの定義
+        # 心身機能・身体構造の課題・ストレングス (順序スロット)
+        body_challenges = ["BC22", "BM22", "BC30", "BM30"]
+        # 活動の課題・ストレングス (順序スロット)
+        activity_challenges = ["BC38", "BM38", "BC47", "BM47", "BC59", "BM59"]
+        # 参加の課題・ストレングス
+        participation_challenges = ["BC68", "BM68"]
+        # その他・留意事項の課題・ストレングス
+        other_challenges = ["BC72", "BM72", "BC76", "BM76"]
+        # 見通し (順序スロット)
+        outlooks = ["BX22", "BX32", "BX42", "BX52", "BX64", "BX72"]
+        # チェックボックス (真偽値判定)
+        checkboxes = ["N76", "U76", "Z76", "AE76", "AK76", "AO76"]
+        
+        special_instructions = []
+
         for key in fields:
             info = mapping_dict.get(key, {})
             line = f"- {key}"
@@ -303,9 +322,46 @@ class AIService:
                 opts = "、".join(info["options"])
                 line += f" (選択肢: {opts})"
             instructions.append(line)
+            
+            # 特殊指示の蓄積
+            if any(k in key for k in checkboxes):
+                special_instructions.append(f"※ {key} は、該当する場合のみ「✔」を出力し、該当しない場合は空文字にしてください。")
         
         fields_str = "\n".join(instructions)
+        special_instr_str = "\n".join(set(special_instructions))
         
+        # 順序スロット論理の注入
+        sequential_logic = ""
+        
+        # 心身機能系が含まれている場合
+        if any(f in fields for f in body_challenges):
+            sequential_logic += """
+## 心身機能・身体構造に関する課題・ストレングスの抽出ルール
+- 「心身機能」に関連する課題をすべて抽出し、リストの上から順に埋めてください。
+- 1つ目の課題は BC22、2つ目の課題があれば BC30 に記入してください。
+- ストレングスも同様に BM22, BM30 の順に記入してください。
+"""
+        # 活動系が含まれている場合
+        if any(f in fields for f in activity_challenges):
+            sequential_logic += """
+## 活動に関する課題・ストレングスの抽出ルール
+- 「活動（ADL/IADL全般）」に関連する課題をすべて抽出し、リストの上から順に埋めてください。
+- 特定の生活動作（排泄や調理など）の横にセルがあっても、それはあくまで記入欄の順番です。
+- 全体を通して1つ目の課題は BC38、2つ目は BC47、3つ目は BC59 に順に記入してください（空欄を作らず詰めてください）。
+"""
+        # 見通しが含まれている場合
+        if any(f in fields for f in outlooks):
+            sequential_logic += """
+## 見通しの抽出ルール
+- 今後の見通しに関する記述をすべて抽出し、BX22 から順に BX32, BX42... と詰めて記入してください。
+"""
+        # 参加・その他が含まれている場合(BC68等)
+        if any(f in fields for f in participation_challenges):
+            sequential_logic += """
+## 参加に関する課題・ストレングス
+- 社会参加や役割に関する課題は BC68/BM68 に記入してください。
+"""
+
         return f"""
 あなたはベテランの認定調査員・ケアマネージャーです。
 今回は**「{phase_name}」**に関する情報のみを抽出してください。
@@ -316,9 +372,13 @@ class AIService:
 
 {fields_str}
 
+{special_instr_str}
+
+{sequential_logic}
+
 ## 出力形式
 JSON形式で、上記リストの項目名をキーとして出力してください。
-値が見つからない場合は空文字 "" にしてください。
+値が見つからない場合は空文字 "" にしてください（推測で埋めないでください）。
 """
 
     def extract_assessment_info(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:

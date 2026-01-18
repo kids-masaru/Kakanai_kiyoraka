@@ -17,6 +17,8 @@ from services.ai_service import AIService
 from services.sheets_service import SheetsService
 from services.storage_service import StorageService
 from services.drive_service import drive_service
+from services.csv_service import csv_service
+from fastapi.responses import Response
 
 app = FastAPI(
     title="Kakanai API",
@@ -467,6 +469,26 @@ async def generate_genogram(request: GenogramRequest):
         return AnalyzeResponse(success=True, data=result)
     except Exception as e:
         return AnalyzeResponse(success=False, error=str(e))
+
+
+@app.post("/api/csv/convert")
+async def convert_csv(file: UploadFile = File(...)):
+    """CSVをExcelに変換"""
+    try:
+        content = await file.read()
+        excel_bytes, filename_or_error = csv_service.convert_csv_to_excel(content, file.filename)
+        
+        if excel_bytes is None:
+            raise HTTPException(status_code=400, detail=filename_or_error)
+            
+        return Response(
+            content=excel_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename_or_error}"}
+        )
+    except Exception as e:
+        print(f"ERROR: CSV convert failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/bodymap/generate", response_model=AnalyzeResponse)

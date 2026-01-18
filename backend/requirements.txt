@@ -11,4 +11,6 @@ google-api-python-client
 boto3==1.34.0
 python-multipart==0.0.6
 pydantic==2.5.3
+pandas
+openpyxl
 # Force rebuild 2026-01-15 - direct upload without R2
