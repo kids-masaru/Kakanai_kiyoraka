@@ -6,6 +6,7 @@ import Konva from 'konva';
 import { KaokuzuData, Room, Furniture, RoomType, FurnitureType } from '@/lib/kaokuzu-types';
 import { useKaokuzuHistory } from '@/hooks/useKaokuzuHistory';
 import { useEditor } from '@/context/EditorContext';
+import Header from './Header';
 
 interface HousePlanEditorProps {
     initialData?: KaokuzuData;
@@ -718,31 +719,7 @@ const HousePlanEditor: React.FC<HousePlanEditorProps> = ({ initialData }) => {
     return (
         <div className="flex h-screen bg-gray-50 font-sans text-slate-700 overflow-hidden relative" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
             {/* App Header */}
-            <div className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 px-4 flex items-center shadow-sm z-50">
-                <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold text-gray-700">CareDX Editor</span>
-                </div>
-                <div className="mx-6 h-6 w-px bg-gray-300"></div>
-                <div className="flex bg-gray-100 p-1 rounded-lg">
-                    <button
-                        onClick={() => window.location.href = '/'}
-                        className="px-4 py-1.5 text-gray-500 hover:text-gray-700 text-sm font-medium transition-all"
-                    >
-                        👨‍👩‍👧‍👦 ジェノグラム
-                    </button>
-                    <button
-                        className="px-4 py-1.5 bg-white text-blue-600 shadow-sm rounded-md text-sm font-bold transition-all"
-                    >
-                        🏠 家屋図
-                    </button>
-                    <button
-                        onClick={() => window.location.href = '/body-map'}
-                        className="px-4 py-1.5 text-gray-500 hover:text-gray-700 text-sm font-medium transition-all"
-                    >
-                        👤 身体図
-                    </button>
-                </div>
-            </div>
+            <Header />
 
             {/* Canvas Area (Fullscreen) */}
             <div className="absolute inset-0 pt-14 bg-slate-100 overflow-hidden">

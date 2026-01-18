@@ -92,6 +92,18 @@ const UploadIcon = () => (
   </svg>
 );
 
+const FileTextIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
+
+const BookOpenIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+  </svg>
+);
+
 export default function Home() {
   const [selectedType, setSelectedType] = useState<DocumentType>("assessment");
   const [showSettings, setShowSettings] = useState(false);
@@ -506,7 +518,15 @@ export default function Home() {
               <Link href="/genogram" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">ジェノグラム</Link>
               <Link href="/body-map" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">身体図</Link>
               <Link href="/house-plan" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">家屋図</Link>
-              <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 ml-2 flex-shrink-0" title="設定">
+              <button onClick={() => alert('CSV変換機能は現在開発中です')} className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex items-center gap-1">
+                <FileTextIcon className="w-3 h-3" />
+                <span>CSV変換</span>
+              </button>
+              <div className="mx-1 h-5 w-px bg-gray-200"></div>
+              <button onClick={() => alert('マニュアルを確認できます')} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 flex-shrink-0" title="マニュアル">
+                <BookOpenIcon />
+              </button>
+              <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 flex-shrink-0" title="設定">
                 <SettingsIcon />
               </button>
             </div>
