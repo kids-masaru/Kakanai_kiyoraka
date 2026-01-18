@@ -563,6 +563,19 @@ class SheetsService:
             traceback.print_exc()
             return {"success": False, "error": f"シート作成は成功しましたが書き込みに失敗: {str(e)}", "sheet_url": new_url}
 
+    def _to_japanese_calendar(self, date_obj) -> str:
+        """西暦対応日付オブジェクトを和暦文字列に変換"""
+        if date_obj.year < 2019:
+            return date_obj.strftime("%Y年%m月%d日") # 平成以前は簡易対応
+        
+        reiwa_year = date_obj.year - 2018
+        # 令和1年は令和元年と表記するのが一般的だが、システム的には1年でも通じる。ユーザー要望は「令和7年」など。
+        # 曜日
+        weekdays = ["月", "火", "水", "木", "金", "土", "日"]
+        wd = weekdays[date_obj.weekday()]
+        
+        return f"令和{reiwa_year}年{date_obj.month}月{date_obj.day}日（{wd}）"
+
     def create_and_write_management_meeting(
         self,
         template_id: str,
@@ -588,8 +601,16 @@ class SheetsService:
         target_folder_id = "1dAzH53gs3lDqlJ4TrV7CxtnvDhVPFVye"
         
         # 1. ファイル名・日付の準備
-        raw_date = date_str if date_str else datetime.datetime.now().strftime("%Y-%m-%d")
-        file_date_str = raw_date.replace("-", "").replace("/", "")
+        if date_str:
+            try:
+                dt_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+            except:
+                dt_obj = datetime.datetime.now()
+        else:
+            dt_obj = datetime.datetime.now()
+            date_str = dt_obj.strftime("%Y-%m-%d")
+            
+        file_date_str = date_str.replace("-", "").replace("/", "")
         
         # タイトル: YYYYMMDD_運営会議
         new_filename = f"{file_date_str}_運営会議"
@@ -645,9 +666,13 @@ class SheetsService:
             # --- 書き込みデータの準備 (数式上書き) ---
             
             # 1. 日付・場所
-            # C3: 日付
-            mtg_date_val = f"{date_str} {time_str}".strip()
-            # C4: 場所
+            # 日付フォーマット: 令和7年10月25日（木） 8時30分〜9時15分
+            jp_date_str = self._to_japanese_calendar(dt_obj)
+            full_date_str = f"{jp_date_str} {time_str}".strip()
+            
+            # B3: 日付 (ユーザーフィードバックによりC3から変更)
+            mtg_date_val = full_date_str
+            # B4: 場所 (ユーザーフィードバックによりC4から変更)
             mtg_place_val = place
             
             # 2. 参加者判定 (A7:E7のヘッダーを読み取ってA9:E9に〇✕)
@@ -737,9 +762,15 @@ class SheetsService:
             # --- Batch Update ---
             updates_batch = []
             
-            updates_batch.append({'range': 'C3', 'values': [[mtg_date_val]]})
-            updates_batch.append({'range': 'C4', 'values': [[mtg_place_val]]})
+            # B3: 日付 (Formula Overwrite)
+            updates_batch.append({'range': 'B3', 'values': [[mtg_date_val]]})
+            # B4: 場所 (Formula Overwrite)
+            updates_batch.append({'range': 'B4', 'values': [[mtg_place_val]]})
+            # A29: 共有事項
             updates_batch.append({'range': 'A29', 'values': [[shared_info]]})
+            
+            # K2: 不要セル消去
+            updates_batch.append({'range': 'K2', 'values': [[""]]})
             
             for item in attendance_updates:
                 cell_addr = gspread.utils.rowcol_to_a1(item['row'], item['col'])
