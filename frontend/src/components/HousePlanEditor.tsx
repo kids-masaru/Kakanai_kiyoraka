@@ -1017,8 +1017,347 @@ const HousePlanEditor: React.FC<HousePlanEditorProps> = ({ initialData }) => {
                         Scale: 1m = 50px
                     </div>
                 </div>
+            </div>
+
+            {/* Load Modal */}
+            {showLoadModal && (
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white p-6 rounded-2xl w-full max-w-md shadow-2xl">
+                        <h3 className="font-bold mb-4 text-xl flex items-center gap-2 text-gray-800">📂 保存された家屋図</h3>
+                        <div className="max-h-[60vh] overflow-y-auto border border-gray-100 rounded-xl bg-gray-50">
+                            {savedFiles.length === 0 ? (
+                                <div className="p-8 text-center text-gray-400">データがありません</div>
+                            ) : (
+                                <ul className="p-2 space-y-1">
+                                    {savedFiles.map(file => (
+                                        <li key={file} className="flex items-center group bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all overflow-hidden">
+                                            <button
+                                                onClick={() => loadFileFromServer(file)}
+                                                className="flex-1 text-left p-3 text-gray-700 font-medium hover:text-blue-600 transition-colors flex items-center gap-2"
+                                            >
+                                                <span className="text-xl">🏠</span> {file}
+                                            </button>
+                                            <button
+                                                onClick={(e) => deleteFileFromServer(file, e)}
+                                                className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors border-l border-gray-100"
+                                                title="削除"
+                                            >
+                                                🗑️
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => setShowLoadModal(false)}
+                            className="mt-6 w-full py-3 bg-gray-800 text-white rounded-xl font-bold hover:bg-gray-900 transition-all shadow-lg shadow-gray-200"
+                        >
+                            閉じる
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default HousePlanEditor;
+                        >
+                            🏠 部屋
+                        </button >
+                        <button
+                            onClick={() => setActiveTab('furniture')}
+                            className={`flex-1 py-3 text-xs font-bold text-center transition-colors ${activeTab === 'furniture' ? 'bg-white text-blue-600 border-t-2 border-blue-600' : 'text-gray-500 hover:bg-gray-200'}`}
+                        >
+                            🛋️ 家具
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('templates')}
+                            className={`flex-1 py-3 text-xs font-bold text-center transition-colors ${activeTab === 'templates' ? 'bg-white text-purple-600 border-t-2 border-purple-600' : 'text-gray-500 hover:bg-gray-200'}`}
+                        >
+                            📄 テンプレ
+                        </button>
+                    </div >
+
+    {/* Scrollable Content Area */ }
+    < div className = "flex-1 overflow-y-auto p-4 max-h-[60vh] custom-scrollbar bg-white" >
+        { activeTab === 'rooms' && (
+            <div className="grid grid-cols-2 gap-2">
+                {Object.keys(ROOM_COLORS).map((type) => (
+                    <button
+                        key={type}
+                        onClick={() => addRoom(type as RoomType)}
+                        className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-all group"
+                    >
+                        <div className="w-8 h-8 rounded mb-1 border shadow-sm" style={{ background: ROOM_COLORS[type as RoomType] }}></div>
+                        <span className="text-xs font-medium text-gray-600 group-hover:text-blue-700">{ROOM_LABELS[type as RoomType]}</span>
+                    </button>
+                ))}
+            </div>
+        )}
+
+{
+    activeTab === 'furniture' && (
+        <div className="grid grid-cols-2 gap-2">
+            {Object.keys(FURNITURE_SHAPES).map((type) => {
+                let label = type;
+                let icon = '📦';
+                switch (type) {
+                    case 'Bed': label = 'ベッド'; icon = '🛏️'; break;
+                    case 'Wheelchair': label = '車椅子'; icon = '♿'; break;
+                    case 'Table': label = '机'; icon = '🪑'; break;
+                    case 'Toilet': label = 'トイレ'; icon = '🚽'; break;
+                    case 'Bath': label = '浴室'; icon = '🛁'; break;
+                    case 'Door': label = '扉'; icon = '🚪'; break;
+                    case 'Window': label = '窓'; icon = '🪟'; break;
+                    case 'Stairs': label = '階段'; icon = '🪜'; break;
+                    case 'Handrail': label = '手すり'; icon = '🦯'; break;
+                }
+
+                return (
+                    <button
+                        key={type}
+                        onClick={() => addFurniture(type as FurnitureType)}
+                        className="flex flex-col items-center justify-center p-2 rounded-lg border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50 transition-all group"
+                    >
+                        <span className="text-xl mb-1 opacity-80 group-hover:scale-110 transition-transform">{icon}</span>
+                        <span className="text-xs font-medium text-gray-600 group-hover:text-emerald-700">
+                            {label}
+                        </span>
+                    </button>
+                );
+            })}
+        </div>
+    )
+}
+
+{
+    activeTab === 'templates' && (
+        <div className="space-y-4">
+            <div className="space-y-2">
+                <h3 className="text-xs font-bold text-gray-500">保存済みテンプレート</h3>
+                {templates.length === 0 && <p className="text-xs text-gray-400">テンプレートはありません</p>}
+                <div className="space-y-1">
+                    {templates.map(tpl => (
+                        <div key={tpl} className="flex items-center gap-2 group">
+                            <button
+                                onClick={() => loadTemplate(tpl)}
+                                className="flex-1 text-left text-xs py-2 px-3 bg-gray-50 hover:bg-purple-50 hover:text-purple-600 rounded border border-gray-100 transition-colors"
+                            >
+                                📄 {tpl}
+                            </button>
+                            <button
+                                onClick={(e) => deleteTemplate(tpl, e)}
+                                className="p-1 text-gray-400 hover:text-red-500"
+                                title="削除"
+                            >
+                                🗑️
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <hr className="border-gray-100" />
+
+            <div className="space-y-2">
+                {!showTemplateSave ? (
+                    <button
+                        onClick={() => setShowTemplateSave(true)}
+                        className="w-full py-2 bg-purple-50 text-purple-600 border border-purple-200 rounded text-xs font-bold hover:bg-purple-100 transition-colors"
+                    >
+                        ＋ 現在の状態を保存
+                    </button>
+                ) : (
+                    <div className="bg-gray-50 p-2 rounded border border-gray-200">
+                        <input
+                            type="text"
+                            placeholder="テンプレート名"
+                            className="w-full text-xs p-1 mb-2 border border-gray-300 rounded"
+                            value={newTemplateName}
+                            onChange={e => setNewTemplateName(e.target.value)}
+                        />
+                        <div className="flex gap-1">
+                            <button
+                                onClick={saveTemplate}
+                                className="flex-1 py-1 bg-purple-600 text-white rounded text-xs font-bold hover:bg-purple-700"
+                            >
+                                保存
+                            </button>
+                            <button
+                                onClick={() => setShowTemplateSave(false)}
+                                className="flex-1 py-1 bg-white border border-gray-300 rounded text-xs hover:bg-gray-50"
+                            >
+                                キャンセル
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+                    </div >
+
+    {/* Footer Actions (Fixed at bottom of sidebar) */ }
+    < div className = "p-3 bg-white border-t border-gray-200 space-y-2 z-10" >
+        {/* Save/Load Buttons */ }
+        < div className = "flex gap-2" >
+                            <button onClick={saveToServer} className="flex-1 py-2 bg-green-50 text-green-600 border border-green-200 rounded text-xs font-bold hover:bg-green-100">💾 保存</button>
+                            <button onClick={loadListFromServer} className="flex-1 py-2 bg-gray-50 text-gray-600 border border-gray-200 rounded text-xs font-bold hover:bg-gray-100">📂 読込</button>
+                        </div >
+
+                        <button
+                            onClick={smartExport}
+                            className="w-full py-2 bg-white border border-blue-200 text-blue-600 rounded-md text-xs font-bold shadow-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                        >
+                            📸 画像として保存
+                        </button>
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={handleUndo}
+                                disabled={!canUndo}
+                                className="flex-1 py-1.5 bg-white border border-gray-200 rounded text-gray-500 text-xs hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                ↩ Undo
+                            </button>
+                            <button
+                                onClick={handleRedo}
+                                disabled={!canRedo}
+                                className="flex-1 py-1.5 bg-white border border-gray-200 rounded text-gray-500 text-xs hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                ↪ Redo
+                            </button>
+                        </div>
+                        <button onClick={deleteSelected} disabled={selectedIds.length === 0} className="w-full py-1.5 bg-red-50 text-red-600 rounded text-xs hover:bg-red-100 disabled:opacity-50 disabled:bg-transparent disabled:text-gray-300">🗑️ 削除</button>
+                    </div >
+                </div >
+
+    {/* Canvas Area (Flex Grow) */ }
+    < div className = "flex-1 relative bg-slate-50 overflow-hidden cursor-crosshair" >
+        {/* Background Grid */ }
+        < div className = "absolute inset-0 opacity-10 pointer-events-none" style = {{
+    backgroundImage: 'linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px)',
+        backgroundSize: '50px 50px'
+}}></div >
+
+                    <Stage
+                        width={3000}
+                        height={2000}
+                        ref={stageRef}
+                        className="cursor-crosshair active:cursor-grabbing"
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                    >
+                        <Layer>
+                            {data.rooms.map((room) => (
+                                <Group
+                                    key={room.id}
+                                    id={room.id}
+                                    name="room" // Tag for selection logic
+                                    x={room.x}
+                                    y={room.y}
+                                    draggable
+                                    onDragStart={onNodeDragStart}
+                                    onDragMove={onNodeDragMove}
+                                    onDragEnd={onNodeDragEnd}
+                                    onTransformEnd={handleTransformEnd}
+                                >
+                                    <Rect
+                                        width={room.width}
+                                        height={room.height}
+                                        fill={ROOM_COLORS[room.type] || '#fff'}
+                                        stroke={selectedIds.includes(room.id) ? '#3b82f6' : '#94a3b8'}
+                                        strokeWidth={selectedIds.includes(room.id) ? 2 : 1}
+                                        shadowColor="black"
+                                        shadowBlur={selectedIds.includes(room.id) ? 10 : 0}
+                                        shadowOpacity={0.1}
+                                    />
+                                    <Text
+                                        text={room.name}
+                                        fontSize={14}
+                                        x={5}
+                                        y={5}
+                                        fill={selectedIds.includes(room.id) ? '#3b82f6' : '#64748b'}
+                                        fontStyle="bold"
+                                    />
+                                    <Text
+                                        text={`${(room.width / data.scale).toFixed(1)}m x ${(room.height / data.scale).toFixed(1)}m`}
+                                        fontSize={10}
+                                        x={5}
+                                        y={25}
+                                        fill="#94a3b8"
+                                    />
+                                </Group>
+                            ))}
+
+                            {data.furniture.map((item) => {
+                                const ShapeComponent = FURNITURE_SHAPES[item.type];
+                                if (!ShapeComponent) return null;
+                                return (
+                                    <Group
+                                        key={item.id}
+                                        id={item.id}
+                                        name="furniture" // Tag for selection
+                                        x={item.x}
+                                        y={item.y}
+                                        draggable
+                                        onDragStart={onNodeDragStart}
+                                        onDragMove={onNodeDragMove}
+                                        onDragEnd={onNodeDragEnd}
+                                        onTransformEnd={handleTransformEnd}
+                                    >
+                                        <ShapeComponent />
+                                        <Rect width={40} height={40} fill="transparent" />
+                                        {selectedIds.includes(item.id) && (
+                                            <Circle x={20} y={20} radius={30} stroke="#3b82f6" strokeWidth={1} dash={[4, 4]} opacity={0.5} />
+                                        )}
+                                    </Group>
+                                );
+                            })}
+
+                            {/* Guide Lines */}
+                            {guideLines.vertical.map((x, i) => (
+                                <Line key={`h-${i}`} points={[x, 0, x, 2000]} stroke="#f43f5e" strokeWidth={1} dash={[4, 4]} />
+                            ))}
+                            {guideLines.horizontal.map((y, i) => (
+                                <Line key={`v-${i}`} points={[0, y, 3000, y]} stroke="#f43f5e" strokeWidth={1} dash={[4, 4]} />
+                            ))}
+
+                            {/* Selection Box Visual */}
+                            {selectionBox && selectionBox.isSelecting && (
+                                <Rect
+                                    x={selectionBox.x}
+                                    y={selectionBox.y}
+                                    width={selectionBox.width}
+                                    height={selectionBox.height}
+                                    fill="rgba(59, 130, 246, 0.1)"
+                                    stroke="#3b82f6"
+                                    strokeWidth={1}
+                                />
+                            )}
+
+                            <Transformer
+                                ref={trRef}
+                                borderStroke="#3b82f6"
+                                anchorStroke="#3b82f6"
+                                anchorFill="white"
+                                anchorSize={10}
+                                borderDash={[4, 4]}
+                                rotationSnaps={[0, 90, 180, 270]}
+                            />
+                        </Layer>
+                    </Stage>
+
+                    <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur px-4 py-2 rounded-full text-xs text-slate-500 shadow-sm border border-slate-200 font-mono">
+                        Scale: 1m = 50px
+                    </div>
+                </div >
                 />
-                <div className="flex gap-1">
+    < div className = "flex gap-1" >
                     <button
                         onClick={saveTemplate}
                         className="flex-1 py-1 bg-purple-600 text-white rounded text-xs font-bold hover:bg-purple-700"
@@ -1031,10 +1370,10 @@ const HousePlanEditor: React.FC<HousePlanEditorProps> = ({ initialData }) => {
                     >
                         キャンセル
                     </button>
-                </div>
-            </div>
+                </div >
+            </div >
                                 )}
-        </div>
+        </div >
                         </div >
                     )}
                 </div >
