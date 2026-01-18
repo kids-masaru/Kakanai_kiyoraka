@@ -782,7 +782,32 @@ class SheetsService:
                 cell_addr = gspread.utils.rowcol_to_a1(item['row'], item['col'])
                 updates_batch.append({'range': cell_addr, 'values': [[item['val']]]})
 
+            # 値の書き込み実行
             worksheet.batch_update(updates_batch)
+            
+            # --- 構造データの修正 (プルダウン解除など) ---
+            # B3セルのプルダウン(入力規則)を解除する
+            # B3 = Row 2, Col 1 (0-indexed)
+            try:
+                requests = [
+                    {
+                        "setDataValidation": {
+                            "range": {
+                                "sheetId": worksheet.id,
+                                "startRowIndex": 2,
+                                "endRowIndex": 3,
+                                "startColumnIndex": 1,
+                                "endColumnIndex": 2
+                            },
+                            "rule": None # ルールをNoneにすると解除される
+                        }
+                    }
+                ]
+                new_ss.batch_update({"requests": requests})
+                print(f"DEBUG: cleared data validation for B3", flush=True)
+            except Exception as e_valid:
+                print(f"WARNING: Failed to clear data validation: {e_valid}", flush=True)
+
             print(f"DEBUG: Successfully populated management meeting sheet: {new_filename}", flush=True)
 
             return {
