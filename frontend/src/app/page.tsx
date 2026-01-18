@@ -502,15 +502,13 @@ export default function Home() {
               <img src="/icon.jpg" alt="カカナイ" className="w-9 h-9 rounded-lg" />
               <h1 className="text-lg font-bold text-gray-900">介護DX カカナイ</h1>
             </div>
-            <div className="flex items-center gap-2">
-
-              <Link href="/genogram" className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">ジェノグラム</Link>
-              <Link href="/body-map" className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">身体図</Link>
-              <Link href="/house-plan" className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">家屋図</Link>
-              <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 ml-2" title="設定">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar w-full md:w-auto">
+              <Link href="/genogram" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">ジェノグラム</Link>
+              <Link href="/body-map" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">身体図</Link>
+              <Link href="/house-plan" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">家屋図</Link>
+              <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 ml-2 flex-shrink-0" title="設定">
                 <SettingsIcon />
               </button>
-
             </div>
           </div>
         </header>
@@ -519,24 +517,26 @@ export default function Home() {
         <main className="max-w-5xl mx-auto px-4 py-4">
           {/* Document Type Selection */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 mb-4">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-gray-700 mr-2">作成:</span>
-              {documentTypes.map((type) => {
-                const typeTheme = getThemeColor(type.value);
-                const isActive = selectedType === type.value;
-                return (
-                  <button
-                    key={type.value}
-                    onClick={() => setSelectedType(type.value)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all mr-2 last:mr-0 ${isActive
-                      ? `${typeTheme.btn} text-white shadow-md`
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
-                  >
-                    {type.label}
-                  </button>
-                );
-              })}
+            <div className="flex flex-col md:flex-row md:items-center gap-2">
+              <span className="text-sm font-medium text-gray-700 mr-2 mb-1 md:mb-0">作成:</span>
+              <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+                {documentTypes.map((type) => {
+                  const typeTheme = getThemeColor(type.value);
+                  const isActive = selectedType === type.value;
+                  return (
+                    <button
+                      key={type.value}
+                      onClick={() => setSelectedType(type.value)}
+                      className={`px-3 py-2 md:py-1.5 rounded-lg text-sm font-medium transition-all w-full md:w-auto text-center ${isActive
+                          ? `${typeTheme.btn} text-white shadow-md`
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                    >
+                      {type.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
