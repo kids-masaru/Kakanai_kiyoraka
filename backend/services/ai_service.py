@@ -353,7 +353,17 @@ class AIService:
         if any(f in fields for f in outlooks):
             sequential_logic += """
 ## 見通しの抽出ルール
-- 今後の見通しに関する記述をすべて抽出し、BX22 から順に BX32, BX42... と詰めて記入してください。
+- 今後の見通しに関する記述を抽出するほか、現状の課題から予測される将来の変化やリスクについても考察して記入してください。
+- BX22 から順に BX32, BX42... と詰めて記入してください。
+"""
+        # 阻害要因（原因）が含まれている場合
+        impediments = ["AU13", "AU14", "AU15", "BN13", "BN14", "BN15"]
+        if any(f in fields for f in impediments):
+            sequential_logic += """
+## 阻害要因（原因）の抽出ルール
+- 「自立した日常生活の阻害要因」は、なぜ自立が難しくなっているのか、その根本的な「原因」を分析して抽出してください。
+- 単なる症状だけでなく、環境、意欲、病状の進行なども含めて考察してください。
+- AU13から順に埋めてください。
 """
         # 参加・その他が含まれている場合(BC68等)
         if any(f in fields for f in participation_challenges):

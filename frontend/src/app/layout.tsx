@@ -9,10 +9,10 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon.jpg", type: "image/jpeg" },
+      { url: "/icon.png", type: "image/png" },
     ],
-    shortcut: "/icon.jpg",
-    apple: "/icon.jpg",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
   },
   appleWebApp: {
     capable: true,
@@ -33,7 +33,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="カカナイ" />
-        <link rel="apple-touch-icon" href="/icon.jpg" />
+        <link rel="apple-touch-icon" href="/icon.png" />
       </head>
       <body className="antialiased bg-gray-50 min-h-screen">
         <EditorProvider>

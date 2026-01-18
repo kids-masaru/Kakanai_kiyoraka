@@ -21,6 +21,9 @@ const ROOM_COLORS: Record<RoomType, string> = {
     Entrance: '#fafaf9', // 玄関 (石材風グレー)
     Corridor: '#f3f4f6', // 廊下 (グレー)
     Other: '#ffffff', // その他
+    Dining: '#ffedd5', // 食堂 (オレンジ系)
+    LivingTatami: '#fef3c7', // リビング(畳)
+    LivingFlooring: '#fefce8', // リビング(フローリング)
 };
 
 const ROOM_LABELS: Record<RoomType, string> = {
@@ -32,6 +35,9 @@ const ROOM_LABELS: Record<RoomType, string> = {
     Entrance: '玄関',
     Corridor: '廊下',
     Other: 'その他',
+    Dining: '食堂',
+    LivingTatami: 'リビング(畳)',
+    LivingFlooring: 'リビング(床)',
 };
 
 // 家具の形状定義 (日本の間取り図記号に準拠)
@@ -97,6 +103,45 @@ const FURNITURE_SHAPES: Record<FurnitureType, any> = {
         <Group {...props}>
             <Rect x={0} y={0} width={40} height={8} fill="#fca5a5" cornerRadius={4} opacity={0.5} />
             <Line points={[2, 4, 38, 4]} stroke="#ef4444" strokeWidth={2} lineCap="round" />
+        </Group>
+    ),
+    Step: (props: any) => (
+        <Group {...props}>
+            <Rect x={0} y={0} width={40} height={20} fill="#e5e5e5" stroke="#333" strokeWidth={1} />
+            <Line points={[0, 10, 40, 10]} stroke="#333" strokeWidth={1} dash={[2, 2]} />
+            <Text text="段差" fontSize={8} x={10} y={5} fill="#555" />
+        </Group>
+    ),
+    StepLocation: (props: any) => (
+        <Group {...props}>
+            <Circle x={10} y={10} radius={8} fill="#fee2e2" stroke="#ef4444" strokeWidth={1} />
+            <Text text="!" fontSize={10} x={8} y={5} fill="#b91c1c" fontStyle="bold" />
+        </Group>
+    ),
+    Washroom: (props: any) => (
+        <Group {...props}>
+            <Rect x={0} y={0} width={40} height={30} fill="#ecfeff" stroke="#333" strokeWidth={1} />
+            <Circle x={20} y={15} radius={10} stroke="#333" strokeWidth={1} fill="white" />
+            <Text text="洗面" fontSize={8} x={2} y={2} fill="#555" />
+        </Group>
+    ),
+    SlidingDoor: (props: any) => (
+        <Group {...props}>
+            <Line points={[0, 0, 20, 0]} stroke="#333" strokeWidth={2} />
+            <Line points={[20, 5, 40, 5]} stroke="#333" strokeWidth={2} />
+            <Text text="引戸" fontSize={8} x={10} y={10} fill="#555" />
+        </Group>
+    ),
+    Futon: (props: any) => (
+        <Group {...props}>
+            <Rect x={0} y={0} width={40} height={70} fill="#d1fae5" stroke="#059669" strokeWidth={1} cornerRadius={2} />
+            <Rect x={5} y={5} width={30} height={10} fill="white" stroke="#059669" strokeWidth={1} />
+            <Text text="布団" fontSize={8} x={10} y={30} fill="#065f46" />
+        </Group>
+    ),
+    HandrailDot: (props: any) => (
+        <Group {...props}>
+            <Circle x={5} y={5} radius={4} fill="#ef4444" />
         </Group>
     )
 };
@@ -777,6 +822,12 @@ const HousePlanEditor: React.FC<HousePlanEditorProps> = ({ initialData }) => {
                                         case 'Window': label = '窓'; icon = '🪟'; break;
                                         case 'Stairs': label = '階段'; icon = '🪜'; break;
                                         case 'Handrail': label = '手すり'; icon = '🦯'; break;
+                                        case 'Step': label = '段差'; icon = '🪜'; break;
+                                        case 'StepLocation': label = '段差箇所'; icon = '⚠️'; break;
+                                        case 'Washroom': label = '洗面所'; icon = '🚰'; break;
+                                        case 'SlidingDoor': label = '引き戸'; icon = '🚪'; break;
+                                        case 'Futon': label = '布団'; icon = '🛌'; break;
+                                        case 'HandrailDot': label = '縦手すり'; icon = '📍'; break;
                                     }
 
                                     return (

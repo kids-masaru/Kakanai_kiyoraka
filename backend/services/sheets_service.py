@@ -965,6 +965,17 @@ class SheetsService:
             updates.append({'range': 'H11', 'values': [[val_item]]})
             updates.append({'range': 'H14', 'values': [[val_content]]})
             updates.append({'range': 'H24', 'values': [[val_conclusion]]})
+
+            # 8. 欠席者意見 (H28) - Default "欠席者意見：なし"
+            val_absentee = data.get("欠席者意見", "")
+            if not val_absentee:
+                val_absentee = "欠席者意見：なし"
+            elif "欠席者意見" not in val_absentee:
+                # If just "None" provided, format it
+                if val_absentee == "なし":
+                    val_absentee = "欠席者意見：なし"
+            
+            updates.append({'range': 'H28', 'values': [[val_absentee]]})
             
             # Batch Update
             worksheet.batch_update(updates)

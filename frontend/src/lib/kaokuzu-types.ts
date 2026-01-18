@@ -3,7 +3,7 @@ export type Point = {
     y: number;
 };
 
-export type RoomType = 'Living' | 'Kitchen' | 'Bedroom' | 'Bathroom' | 'Toilet' | 'Entrance' | 'Corridor' | 'Other';
+export type RoomType = 'Living' | 'Kitchen' | 'Bedroom' | 'Bathroom' | 'Toilet' | 'Entrance' | 'Corridor' | 'Other' | 'Dining' | 'LivingTatami' | 'LivingFlooring';
 
 export type Room = {
     id: string;
@@ -23,7 +23,7 @@ export type Wall = {
     thickness: number;
 };
 
-export type FurnitureType = 'Bed' | 'Wheelchair' | 'Table' | 'Toilet' | 'Bath' | 'Door' | 'Window' | 'Stairs' | 'Handrail';
+export type FurnitureType = 'Bed' | 'Wheelchair' | 'Table' | 'Toilet' | 'Bath' | 'Door' | 'Window' | 'Stairs' | 'Handrail' | 'Step' | 'StepLocation' | 'Washroom' | 'SlidingDoor' | 'Futon' | 'HandrailDot';
 
 export type Furniture = {
     id: string;

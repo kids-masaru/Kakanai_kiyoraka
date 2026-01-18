@@ -73,9 +73,16 @@ export default function Header({ onOpenSettings, showSettingsButton = false }: H
 
                 {/* Right: System (Fixed) */}
                 <div className="flex items-center gap-1 flex-shrink-0 border-l border-gray-200 pl-2">
-                    <button onClick={() => alert('マニュアルを確認できます')} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 flex-shrink-0" title="マニュアル">
+                    <a
+                        href="https://sites.google.com/kiyoraka-shuri.com/22svsms/%E3%83%88%E3%83%83%E3%83%97%E3%83%9A%E3%83%BC%E3%82%B8"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 flex-shrink-0 flex flex-col items-center gap-0.5"
+                        title="マニュアル"
+                    >
                         <BookOpenIcon />
-                    </button>
+                        <span className="text-[10px] leading-none">Manual</span>
+                    </a>
                     {showSettingsButton && (
                         <button onClick={onOpenSettings} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 flex-shrink-0" title="設定">
                             <SettingsIcon />

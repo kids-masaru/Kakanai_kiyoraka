@@ -195,9 +195,12 @@ async def analyze_audio(request: AnalyzeAudioRequest):
             if folder_id:
                 print(f"DEBUG: Uploading {len(file_contents)} files from R2 to Drive Folder: {folder_id}", flush=True)
                 for i, (data, mime) in enumerate(file_contents):
-                    # ファイル名決定 (R2のキーを使用)
+                    # ファイル名決定 (優先度: filenames > file_keys > file_key > default)
                     fname = f"audio_{i}"
-                    if request.file_keys and i < len(request.file_keys):
+                    
+                    if request.filenames and i < len(request.filenames):
+                         fname = request.filenames[i]
+                    elif request.file_keys and i < len(request.file_keys):
                         fname = request.file_keys[i]
                     elif request.file_key:
                         fname = request.file_key

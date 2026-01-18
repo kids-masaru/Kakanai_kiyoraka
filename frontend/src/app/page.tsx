@@ -241,6 +241,7 @@ export default function Home() {
         // --- R2 Route (Bypass Vercel) ---
         setProcessMessage(`大きなファイルを検出しました。クラウド経由でアップロード中...`);
         const fileKeys: string[] = [];
+        const filenames: string[] = [];
 
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
@@ -252,10 +253,11 @@ export default function Home() {
           // Upload to R2
           await uploadToR2(upload_url, file);
           fileKeys.push(file_key);
+          filenames.push(file.name);
         }
 
         setProcessMessage("AI分析中... (クラウド上のファイルを処理)");
-        analyzeResult = await analyzeAudio(fileKeys, analysisType);
+        analyzeResult = await analyzeAudio(fileKeys, analysisType, filenames);
 
       } else {
         // --- Direct Route (Existing, faster for small files) ---

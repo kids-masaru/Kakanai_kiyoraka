@@ -23,6 +23,7 @@ import LZString from 'lz-string';
 
 import PersonNode from '@/components/nodes/PersonNode';
 import MarriageNode from '@/components/nodes/MarriageNode';
+import HouseholdNode from '@/components/nodes/HouseholdNode';
 import PropertyPanel from '@/components/PropertyPanel';
 import RelationshipPanel from '@/components/RelationshipPanel';
 import AIInputPanel from '@/components/AIInputPanel';
@@ -164,7 +165,53 @@ function GenogramEditorContent() {
   const nodeTypes = useMemo<NodeTypes>(() => ({
     person: PersonNode,
     marriage: MarriageNode,
+    household: HouseholdNode,
   }), []);
+
+  const addHousehold = useCallback(() => {
+    takeSnapshot(nodes, edges);
+    const id = `household_${Date.now()}`;
+
+    // Calculate position based on selection or center
+    let posX = 100;
+    let posY = 100;
+    let width = 300;
+    let height = 300;
+
+    const selectedNodes = nodes.filter(n => n.selected);
+    if (selectedNodes.length > 0) {
+      // Find bounding box
+      const minX = Math.min(...selectedNodes.map(n => n.position.x));
+      const minY = Math.min(...selectedNodes.map(n => n.position.y));
+      const maxX = Math.max(...selectedNodes.map(n => n.position.x + (n.width || 100)));
+      const maxY = Math.max(...selectedNodes.map(n => n.position.y + (n.height || 100)));
+
+      posX = minX - 20;
+      posY = minY - 20;
+      width = (maxX - minX) + 40;
+      height = (maxY - minY) + 40;
+    } else {
+      const currentNodes = getNodes();
+      if (currentNodes.length > 0) {
+        const lastNode = currentNodes[currentNodes.length - 1];
+        posX = lastNode.position.x + 50;
+        posY = lastNode.position.y + 50;
+      }
+    }
+
+    const newNode: Node = {
+      id,
+      type: 'household',
+      position: { x: posX, y: posY },
+      data: { label: '世帯' },
+      style: { width, height }, // Set initial size
+      selected: true,
+      zIndex: -1, // Behind other nodes
+    };
+
+    setNodes((nds) => [...nds, newNode]);
+    setTimeout(() => takeSnapshot([...nodes, newNode], edges), 0);
+  }, [setNodes, nodes, edges, takeSnapshot, getNodes]);
 
   // AI生成結果を適用
   const handleAIGenerate = useCallback(
@@ -631,6 +678,17 @@ function GenogramEditorContent() {
                 }}
               >
                 🔶 不明
+              </button>
+
+              <button
+                onClick={addHousehold}
+                style={{
+                  padding: '6px', background: '#fafaf9', border: '1px solid #e7e5e4',
+                  borderRadius: '6px', cursor: 'pointer', fontSize: '12px', textAlign: 'center', width: '100%', marginTop: '2px',
+                  color: '#44403c', fontWeight: 'bold'
+                }}
+              >
+                🏠 世帯囲み
               </button>
 
               <hr style={{ margin: '8px 0', border: 'none', borderTop: '1px solid #e5e7eb' }} />
