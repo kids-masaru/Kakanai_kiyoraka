@@ -189,6 +189,23 @@ async def analyze_audio(request: AnalyzeAudioRequest):
         else:
             raise HTTPException(status_code=400, detail="No file_key or file_keys provided")
 
+        # 1.5 Google Driveへの自動保存 (会議系のみ・R2経由分)
+        if request.analysis_type in ["management_meeting", "service_meeting"]:
+            folder_id = drive_service.get_folder_id_by_type(request.analysis_type)
+            if folder_id:
+                print(f"DEBUG: Uploading {len(file_contents)} files from R2 to Drive Folder: {folder_id}", flush=True)
+                for i, (data, mime) in enumerate(file_contents):
+                    # ファイル名決定 (R2のキーを使用)
+                    fname = f"audio_{i}"
+                    if request.file_keys and i < len(request.file_keys):
+                        fname = request.file_keys[i]
+                    elif request.file_key:
+                        fname = request.file_key
+                    
+                    drive_service.upload_file(data, fname, mime, folder_id)
+            else:
+                print(f"DEBUG: No folder ID configured for {request.analysis_type}, skipping upload", flush=True)
+
         # 分析タイプに応じて処理
         if request.analysis_type == "assessment":
             result = ai_service.extract_assessment_info(file_contents)

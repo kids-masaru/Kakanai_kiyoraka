@@ -598,8 +598,8 @@ class SheetsService:
         import datetime
         
         
-        # 0. ターゲットフォルダID (引数を使用)
-        # target_folder_id = folder_id
+        # 0. ターゲットフォルダID（ユーザー指定の固定ID）
+        target_folder_id = "1dAzH53gs3lDqlJ4TrV7CxtnvDhVPFVye"
         
         # 1. ファイル名・日付の準備
         if date_str:
@@ -617,8 +617,8 @@ class SheetsService:
         new_filename = f"{file_date_str}_運営会議"
         
         # 2. 空のスプレッドシート作成
-        print(f"DEBUG: Creating empty spreadsheet '{new_filename}' in folder {folder_id}", flush=True)
-        new_id, new_url = drive_service.create_empty_spreadsheet(new_filename, folder_id)
+        print(f"DEBUG: Creating empty spreadsheet '{new_filename}' in folder {target_folder_id}", flush=True)
+        new_id, new_url = drive_service.create_empty_spreadsheet(new_filename, target_folder_id)
         
         if not new_id:
             return {"success": False, "error": "スプレッドシートの作成に失敗しました"}

@@ -176,9 +176,9 @@ class DriveService:
     def get_folder_id_by_type(self, meeting_type: str) -> Optional[str]:
         """会議タイプに応じたフォルダIDを環境変数から取得"""
         if meeting_type == "management_meeting": # 運営会議
-            return os.getenv("GOOGLE_DRIVE_MANAGEMENT_MEETING_FOLDER_ID")
+            return "1qp-QG3xznoj1tCbfkWaHL5TAPsLy2DE5"
         elif meeting_type == "service_meeting": # サービス担当者会議
-            return os.getenv("GOOGLE_DRIVE_SERVICE_MEETING_FOLDER_ID")
+            return "17HIIJUFlCcMuSHiZZ8nD4pzb4LnAijHO"
         elif meeting_type == "assessment": # アセスメント（新規作成用フォルダ）
              return os.getenv("GOOGLE_DRIVE_ASSESSMENT_FOLDER_ID")
         return None
