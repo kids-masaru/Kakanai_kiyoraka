@@ -84,6 +84,10 @@ class SheetsWriteRequest(BaseModel):
     time_str: str = ""
     place: str = ""
     participants: str = ""
+    # サービス担当者会議用の追加フィールド
+    user_name: str = ""
+    staff_name: str = ""
+    meeting_count: str = ""
 
 
 class GenogramRequest(BaseModel):
@@ -309,6 +313,29 @@ async def write_to_sheets(request: SheetsWriteRequest):
         elif request.write_mode == "append":
             # 行追加モード（会議用）
             if request.meeting_type == "service_meeting":
+                # --- 手入力データの優先適用 ---
+                # アプリから別途送られてくる「日時」「場所」「氏名」「回数」を
+                # AIの分析結果(request.data)に強制上書きする。
+                if not request.data:
+                    request.data = {}
+                
+                # 日時: date_str + time_str
+                if request.date_str:
+                    request.data["開催日"] = request.date_str
+                if request.time_str:
+                     request.data["開催時間"] = request.time_str
+                if request.place:
+                    request.data["開催場所"] = request.place
+                
+                # 新規追加: user_name, staff_name, meeting_count
+                if request.user_name:
+                    request.data["利用者名"] = request.user_name
+                if request.staff_name:
+                    request.data["担当者名"] = request.staff_name
+                if request.meeting_count:
+                    # 数値のみの場合は「第X回」等の加工はせずそのまま渡す（数式で整形されるか、またはそのまま表示）
+                    request.data["開催回数"] = request.meeting_count
+                
                 # 1. 既存のマスタシートへ行追加
                 append_result = sheets_service.write_service_meeting_to_row(
                     spreadsheet_id=request.spreadsheet_id,
