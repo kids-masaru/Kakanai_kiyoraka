@@ -340,39 +340,39 @@ export default function Home() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">受付対応者</label>
-              <input type="text" value={assessmentForm.受付対応者} onChange={(e) => setAssessmentForm({ ...assessmentForm, 受付対応者: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="山田太郎" />
+              <input type="text" value={assessmentForm.受付対応者} onChange={(e) => setAssessmentForm({ ...assessmentForm, 受付対応者: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="山田太郎" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">アセスメント理由</label>
-              <select value={assessmentForm.アセスメント理由} onChange={(e) => setAssessmentForm({ ...assessmentForm, アセスメント理由: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+              <select value={assessmentForm.アセスメント理由} onChange={(e) => setAssessmentForm({ ...assessmentForm, アセスメント理由: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
                 {assessmentReasonOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">相談者氏名</label>
-              <input type="text" value={assessmentForm.相談者氏名} onChange={(e) => setAssessmentForm({ ...assessmentForm, 相談者氏名: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="鈴木花子" />
+              <input type="text" value={assessmentForm.相談者氏名} onChange={(e) => setAssessmentForm({ ...assessmentForm, 相談者氏名: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="鈴木花子" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">続柄</label>
-              <select value={assessmentForm.続柄} onChange={(e) => setAssessmentForm({ ...assessmentForm, 続柄: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+              <select value={assessmentForm.続柄} onChange={(e) => setAssessmentForm({ ...assessmentForm, 続柄: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
                 {relationshipOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">実施場所</label>
-              <select value={assessmentForm.実施場所} onChange={(e) => setAssessmentForm({ ...assessmentForm, 実施場所: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+              <select value={assessmentForm.実施場所} onChange={(e) => setAssessmentForm({ ...assessmentForm, 実施場所: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
                 {locationOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">受付方法</label>
-              <select value={assessmentForm.受付方法} onChange={(e) => setAssessmentForm({ ...assessmentForm, 受付方法: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+              <select value={assessmentForm.受付方法} onChange={(e) => setAssessmentForm({ ...assessmentForm, 受付方法: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
                 {receptionMethodOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1">備考</label>
-              <input type="text" value={assessmentForm.アセスメント理由_備考} onChange={(e) => setAssessmentForm({ ...assessmentForm, アセスメント理由_備考: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="備考があれば入力" />
+              <input type="text" value={assessmentForm.アセスメント理由_備考} onChange={(e) => setAssessmentForm({ ...assessmentForm, アセスメント理由_備考: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="備考があれば入力" />
             </div>
           </div>
         );
@@ -381,27 +381,27 @@ export default function Home() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">開催日</label>
-              <input type="date" value={managementForm.開催日} onChange={(e) => setManagementForm({ ...managementForm, 開催日: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" />
+              <input type="date" value={managementForm.開催日} onChange={(e) => setManagementForm({ ...managementForm, 開催日: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">開催場所</label>
-              <input type="text" value={managementForm.開催場所} onChange={(e) => setManagementForm({ ...managementForm, 開催場所: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="会議室" />
+              <input type="text" value={managementForm.開催場所} onChange={(e) => setManagementForm({ ...managementForm, 開催場所: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="会議室" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">開始</label>
-              <select value={managementForm.開始時間} onChange={(e) => setManagementForm({ ...managementForm, 開始時間: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+              <select value={managementForm.開始時間} onChange={(e) => setManagementForm({ ...managementForm, 開始時間: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
                 {timeOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">終了</label>
-              <select value={managementForm.終了時間} onChange={(e) => setManagementForm({ ...managementForm, 終了時間: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+              <select value={managementForm.終了時間} onChange={(e) => setManagementForm({ ...managementForm, 終了時間: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
                 {timeOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div className="col-span-2 md:col-span-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">参加者</label>
-              <input type="text" value={managementForm.参加者} onChange={(e) => setManagementForm({ ...managementForm, 参加者: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="例: 井﨑、武島、〇〇" />
+              <input type="text" value={managementForm.参加者} onChange={(e) => setManagementForm({ ...managementForm, 参加者: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="例: 井﨑、武島、〇〇" />
             </div>
           </div>
         );
@@ -410,37 +410,37 @@ export default function Home() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">担当者名</label>
-              <input type="text" value={serviceForm.担当者名} onChange={(e) => setServiceForm({ ...serviceForm, 担当者名: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="山田太郎" />
+              <input type="text" value={serviceForm.担当者名} onChange={(e) => setServiceForm({ ...serviceForm, 担当者名: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="山田太郎" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">利用者名</label>
-              <input type="text" value={serviceForm.利用者名} onChange={(e) => setServiceForm({ ...serviceForm, 利用者名: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="鈴木花子" />
+              <input type="text" value={serviceForm.利用者名} onChange={(e) => setServiceForm({ ...serviceForm, 利用者名: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" placeholder="鈴木花子" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">開催日</label>
-              <input type="date" value={serviceForm.開催日} onChange={(e) => setServiceForm({ ...serviceForm, 開催日: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" />
+              <input type="date" value={serviceForm.開催日} onChange={(e) => setServiceForm({ ...serviceForm, 開催日: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">開催場所</label>
-              <select value={serviceForm.開催場所} onChange={(e) => setServiceForm({ ...serviceForm, 開催場所: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+              <select value={serviceForm.開催場所} onChange={(e) => setServiceForm({ ...serviceForm, 開催場所: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
                 {locationOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">開始</label>
-              <select value={serviceForm.開始時間} onChange={(e) => setServiceForm({ ...serviceForm, 開始時間: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+              <select value={serviceForm.開始時間} onChange={(e) => setServiceForm({ ...serviceForm, 開始時間: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
                 {timeOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">終了</label>
-              <select value={serviceForm.終了時間} onChange={(e) => setServiceForm({ ...serviceForm, 終了時間: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+              <select value={serviceForm.終了時間} onChange={(e) => setServiceForm({ ...serviceForm, 終了時間: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
                 {timeOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">開催回数</label>
-              <select value={serviceForm.開催回数} onChange={(e) => setServiceForm({ ...serviceForm, 開催回数: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+              <select value={serviceForm.開催回数} onChange={(e) => setServiceForm({ ...serviceForm, 開催回数: e.target.value })} className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
                 {meetingCountOptions.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
@@ -500,7 +500,7 @@ export default function Home() {
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img src="/icon.jpg" alt="カカナイ" className="w-9 h-9 rounded-lg" />
-              <h1 className="text-lg font-bold text-gray-900">介護DX カカナイ</h1>
+              <h1 className="text-sm md:text-lg font-bold text-gray-900 whitespace-nowrap">介護DX カカナイ</h1>
             </div>
             <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar w-full md:w-auto">
               <Link href="/genogram" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">ジェノグラム</Link>
@@ -528,8 +528,8 @@ export default function Home() {
                       key={type.value}
                       onClick={() => setSelectedType(type.value)}
                       className={`px-3 py-2 md:py-1.5 rounded-lg text-sm font-medium transition-all w-full md:w-auto text-center ${isActive
-                          ? `${typeTheme.btn} text-white shadow-md`
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        ? `${typeTheme.btn} text-white shadow-md`
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                         }`}
                     >
                       {type.label}
