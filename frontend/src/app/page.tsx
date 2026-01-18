@@ -401,7 +401,7 @@ export default function Home() {
             </div>
             <div className="col-span-2 md:col-span-4">
               <label className="block text-xs font-medium text-gray-600 mb-1">参加者</label>
-              <input type="text" value={managementForm.参加者} onChange={(e) => setManagementForm({ ...managementForm, 参加者: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 text-gray-900" placeholder="例: 井﨑、武島、〇〇" />
+              <input type="text" value={managementForm.参加者} onChange={(e) => setManagementForm({ ...managementForm, 参加者: e.target.value })} className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 text-gray-900" placeholder="例: 武島、〇〇" />
             </div>
           </div>
         );
@@ -498,9 +498,9 @@ export default function Home() {
         {/* Header */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div className="flex flex-col items-center justify-center gap-0">
+            <div className="flex flex-col items-center justify-center gap-0 w-auto">
               <img src="/icon.jpg" alt="カカナイ" className="w-8 h-8 rounded-lg" />
-              <h1 className="text-[10px] font-bold text-gray-900 leading-none mt-0.5">カカナイ</h1>
+              <h1 className="text-[10px] font-bold text-gray-900 leading-none mt-0.5 whitespace-nowrap">カカナイ</h1>
             </div>
             <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar w-full md:w-auto">
               <Link href="/genogram" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors">ジェノグラム</Link>
@@ -548,7 +548,7 @@ export default function Home() {
 
           {/* Upload Section */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">ファイル分析（音声・PDF・画像）- 複数選択可</h3>
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">ファイル分析（複数選択可）</h3>
 
             <div
               className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors mb-3 ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
@@ -573,7 +573,7 @@ export default function Home() {
                     <div className="flex-shrink-0 text-blue-500">📄</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-700 truncate">{f.name}</p>
+                        <p className="text-sm font-medium text-gray-700 truncate max-w-[150px] md:max-w-none">{f.name}</p>
                         <p className="text-xs text-gray-500">{(f.size / 1024 / 1024).toFixed(2)}MB</p>
                       </div>
                     </div>
@@ -610,7 +610,7 @@ export default function Home() {
                     <span>処理中...</span>
                   </>
                 ) : (
-                  `選択した${files.length}件を統合して${documentTypes.find(t => t.value === selectedType)?.label}を作成`
+                  `AIにて抽出して作成`
                 )}
               </button>
             </div>
