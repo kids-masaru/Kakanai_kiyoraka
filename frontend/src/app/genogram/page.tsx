@@ -557,7 +557,7 @@ function GenogramEditorContent() {
   );
 
   return (
-    <div className="w-full h-screen relative flex flex-col pt-14" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
+    <div className="w-full h-screen relative flex flex-col" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
       {/* App Header / Switcher */}
       <Header />
 

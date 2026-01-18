@@ -461,10 +461,10 @@ export default function BodyMapEditor() {
     const selectedMarker = data.markers.find(m => m.id === selectedId);
 
     return (
-        <div className="flex h-screen bg-gray-50 font-sans text-slate-700 overflow-hidden relative" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
+        <div className="flex flex-col h-screen bg-gray-50 font-sans text-slate-700 overflow-hidden relative" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
             <Header />
 
-            <div className="absolute inset-0 pt-14 bg-slate-50 overflow-hidden cursor-crosshair">
+            <div className="flex-1 relative bg-slate-50 overflow-hidden cursor-crosshair">
                 <Stage
                     width={1400}
                     height={900}
@@ -552,7 +552,7 @@ export default function BodyMapEditor() {
                 </Stage>
             </div>
 
-            <div className="absolute top-20 right-4 w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden flex flex-col z-40 p-3 max-h-[calc(100vh-6rem)] overflow-y-auto">
+            <div className="absolute top-4 right-4 w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden flex flex-col z-40 p-3 max-h-[calc(100vh-6rem)] overflow-y-auto">
                 <h2 className="text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
                     <span>🖌️</span> 身体図エディタ
                 </h2>

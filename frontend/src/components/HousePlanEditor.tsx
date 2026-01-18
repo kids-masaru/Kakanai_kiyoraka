@@ -717,12 +717,10 @@ const HousePlanEditor: React.FC<HousePlanEditorProps> = ({ initialData }) => {
     };
 
     return (
-        <div className="flex h-screen bg-gray-50 font-sans text-slate-700 overflow-hidden relative" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
-            {/* App Header */}
+        <div className="flex flex-col h-screen bg-gray-50 font-sans text-slate-700 overflow-hidden relative" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
             <Header />
 
-            {/* Canvas Area (Fullscreen) */}
-            <div className="absolute inset-0 pt-14 bg-slate-100 overflow-hidden">
+            <div className="flex-1 relative bg-slate-50 overflow-hidden cursor-crosshair">
                 {/* Background Grid */}
                 <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
                     backgroundImage: 'linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px)',
@@ -844,7 +842,7 @@ const HousePlanEditor: React.FC<HousePlanEditorProps> = ({ initialData }) => {
             </div>
 
             {/* Floating Tool Panel */}
-            <div className="absolute top-20 left-4 w-60 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden flex flex-col z-40">
+            <div className="absolute top-4 left-4 w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden flex flex-col z-40 p-3 max-h-[calc(100vh-6rem)] overflow-y-auto">
                 {/* Panel Tabs - Inverted Colors as requested (Active=White, Inactive=Gray) */}
                 <div className="flex border-b border-gray-200 bg-gray-100">
                     <button

@@ -31,7 +31,7 @@ interface HeaderProps {
 export default function Header({ onOpenSettings, showSettingsButton = false }: HeaderProps) {
     return (
         <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-            <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-2 overflow-hidden">
+            <div className="max-w-5xl mx-auto px-2 md:px-4 py-3 flex items-center justify-between gap-2">
                 {/* Left: Logo (Fixed) */}
                 <Link href="/" className="flex flex-col items-center justify-center gap-0 w-auto flex-shrink-0 hover:opacity-80 transition-opacity">
                     <img src="/icon.jpg" alt="カカナイ" className="w-8 h-8 rounded-lg" />
