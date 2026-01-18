@@ -144,6 +144,35 @@ class DriveService:
             print(f"Failed to copy spreadsheet: {e}")
             return None, None
 
+    def create_empty_spreadsheet(self, title: str, folder_id: str) -> Tuple[Optional[str], Optional[str]]:
+        """
+        指定フォルダに空のスプレッドシートを作成
+        Returns: (spreadsheet_id, web_view_link)
+        """
+        if not self.service:
+            print("Drive Service not initialized")
+            return None, None
+
+        try:
+            file_metadata = {
+                'name': title,
+                'mimeType': 'application/vnd.google-apps.spreadsheet',
+                'parents': [folder_id]
+            }
+            
+            file = self.service.files().create(
+                body=file_metadata,
+                fields='id, webViewLink',
+                supportsAllDrives=True
+            ).execute()
+            
+            print(f"Created empty spreadsheet: {title} (ID: {file.get('id')})")
+            return file.get('id'), file.get('webViewLink')
+
+        except Exception as e:
+            print(f"Failed to create empty spreadsheet: {e}")
+            return None, None
+
     def get_folder_id_by_type(self, meeting_type: str) -> Optional[str]:
         """会議タイプに応じたフォルダIDを環境変数から取得"""
         if meeting_type == "management_meeting": # 運営会議
