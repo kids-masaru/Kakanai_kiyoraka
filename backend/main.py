@@ -63,7 +63,8 @@ class PresignedUrlResponse(BaseModel):
 
 
 class AnalyzeAudioRequest(BaseModel):
-    file_key: str
+    file_key: Optional[str] = None
+    file_keys: Optional[List[str]] = None
     analysis_type: str = "assessment"  # assessment, meeting, qa
 
 
@@ -156,33 +157,54 @@ async def upload_file_direct(file: UploadFile = File(...)):
 @app.post("/api/analyze/audio", response_model=AnalyzeResponse)
 async def analyze_audio(request: AnalyzeAudioRequest):
     """
-    R2経由の分析（古いエンドポイント、互換性のために残すが、AI Serviceの改修により動作しない可能性あり）
-    TODO: 必要ならAI Serviceの旧メソッド（_upload_to_geminiを使わない形）を復活させるか、ここを改修する
-    今回はDirect Uploadがメインなので一旦Direct推奨
+    R2経由の分析（複数ファイル対応）
     """
     try:
-        # R2からファイルを取得
-        audio_data = storage_service.get_file(request.file_key)
+        file_contents = []
+
+        # 1. file_keys (複数) があれば優先
+        if request.file_keys:
+            print(f"DEBUG: Processing {len(request.file_keys)} files from R2", flush=True)
+            for key in request.file_keys:
+                data = storage_service.get_file(key)
+                # 仮のMIMEタイプ (拡張子から推測できればベストだが、一旦汎用)
+                mime = "audio/mp4" 
+                # R2のキーに拡張子が含まれている場合が多いので、補正ロジックを入れるとベター
+                if key.lower().endswith(".pdf"): mime = "application/pdf"
+                elif key.lower().endswith(".jpg"): mime = "image/jpeg"
+                elif key.lower().endswith(".png"): mime = "image/png"
+                
+                file_contents.append((data, mime))
         
-        # MIME Typeは不明だが、通常音声
-        mime_type = "audio/mp4"
+        # 2. file_key (単体) の場合 (後方互換)
+        elif request.file_key:
+            print(f"DEBUG: Processing single file from R2: {request.file_key}", flush=True)
+            data = storage_service.get_file(request.file_key)
+            mime = "audio/mp4"
+            if request.file_key.lower().endswith(".pdf"): mime = "application/pdf"
+            
+            file_contents.append((data, mime))
+        
+        else:
+            raise HTTPException(status_code=400, detail="No file_key or file_keys provided")
 
         # 分析タイプに応じて処理
         if request.analysis_type == "assessment":
-            result = ai_service.extract_assessment_info(audio_data, mime_type)
+            result = ai_service.extract_assessment_info(file_contents)
         elif request.analysis_type == "management_meeting":
-            result = ai_service.generate_management_meeting_summary(audio_data, mime_type)
+            result = ai_service.generate_management_meeting_summary(file_contents)
         elif request.analysis_type == "service_meeting":
-            result = ai_service.generate_service_meeting_summary(audio_data, mime_type)
+            result = ai_service.generate_service_meeting_summary(file_contents)
         elif request.analysis_type == "meeting":
-            result = ai_service.generate_meeting_summary(audio_data, mime_type)
+            result = ai_service.generate_meeting_summary(file_contents)
         elif request.analysis_type == "qa":
-            result = ai_service.extract_qa_from_audio(audio_data, mime_type)
+            result = ai_service.extract_qa_from_audio(file_contents)
         else:
             raise ValueError(f"Unknown analysis type: {request.analysis_type}")
         
         return AnalyzeResponse(success=True, data=result)
     except Exception as e:
+        print(f"ERROR: analyze_audio failed: {e}", flush=True)
         return AnalyzeResponse(success=False, error=str(e))
 
 

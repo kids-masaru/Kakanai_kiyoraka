@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Header from "@/components/Header";
 
 // Icons
 const FileTextIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
@@ -94,32 +95,7 @@ export default function CsvConvertPage() {
 
     return (
         <div className="min-h-screen flex flex-col bg-gray-50">
-            {/* Header (Replicated for consistency) */}
-            <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-                <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
-                    <Link href="/" className="flex flex-col items-center justify-center gap-0 w-auto flex-shrink-0 hover:opacity-80 transition-opacity">
-                        <img src="/icon.jpg" alt="カカナイ" className="w-8 h-8 rounded-lg" />
-                        <h1 className="text-[10px] font-bold text-gray-900 leading-none mt-0.5 whitespace-nowrap">カカナイ</h1>
-                    </Link>
-
-                    <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar min-w-0 px-1">
-                        <Link href="/genogram" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">ジェノグラム</Link>
-                        <Link href="/body-map" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">身体図</Link>
-                        <Link href="/house-plan" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">家屋図</Link>
-                        <div className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-lg shadow-sm flex items-center gap-1 flex-shrink-0">
-                            <FileTextIcon className="w-3 h-3" />
-                            <span>CSV変換</span>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 flex-shrink-0 border-l border-gray-200 pl-2">
-                        {/* No settings needed for this page */}
-                        <button onClick={() => alert('マニュアル')} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 flex-shrink-0" title="マニュアル">
-                            <BookOpenIcon />
-                        </button>
-                    </div>
-                </div>
-            </header>
+            <Header />
 
             <main className="max-w-3xl mx-auto px-4 py-8 flex-1 w-full">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">

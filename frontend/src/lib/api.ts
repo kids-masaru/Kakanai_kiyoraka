@@ -85,18 +85,25 @@ export async function uploadFileDirect(
  * Analyze audio file
  */
 export async function analyzeAudio(
-    fileKey: string,
-    analysisType: 'assessment' | 'meeting' | 'qa' = 'assessment'
+    fileKeyOrKeys: string | string[],
+    analysisType: 'assessment' | 'meeting' | 'management_meeting' | 'service_meeting' | 'qa' = 'assessment'
 ): Promise<AnalyzeResponse> {
+    const body: Record<string, unknown> = {
+        analysis_type: analysisType,
+    };
+
+    if (Array.isArray(fileKeyOrKeys)) {
+        body.file_keys = fileKeyOrKeys;
+    } else {
+        body.file_key = fileKeyOrKeys;
+    }
+
     const response = await fetch(`${API_BASE_URL}/api/analyze/audio`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-            file_key: fileKey,
-            analysis_type: analysisType,
-        }),
+        body: JSON.stringify(body),
     });
 
     return response.json();

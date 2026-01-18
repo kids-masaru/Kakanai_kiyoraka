@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { analyzeAudioDirect, writeToSheets } from "@/lib/api";
+import { analyzeAudioDirect, writeToSheets, getPresignedUrl, uploadToR2, analyzeAudio } from "@/lib/api";
+import Header from "@/components/Header";
 
 type DocumentType = "assessment" | "service_meeting" | "management_meeting";
 
@@ -73,12 +74,7 @@ const timeOptions = Array.from({ length: 25 }, (_, i) => `${String(i).padStart(2
 const geminiModels = ["gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.0-flash"];
 
 // SVG Icons
-const SettingsIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-  </svg>
-);
+
 
 const CloseIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -92,17 +88,7 @@ const UploadIcon = () => (
   </svg>
 );
 
-const FileTextIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-  </svg>
-);
 
-const BookOpenIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-  </svg>
-);
 
 export default function Home() {
   const [selectedType, setSelectedType] = useState<DocumentType>("assessment");
@@ -243,11 +229,38 @@ export default function Home() {
     setExtractionResult(null);
 
     try {
-      // 1. Analyze (All files at once)
+      // 1. Check file sizes for R2 route
+      const LARGE_FILE_THRESHOLD = 4 * 1024 * 1024; // 4MB
+      const hasLargeFile = files.some(f => f.size > LARGE_FILE_THRESHOLD);
       const analysisType = selectedType === "assessment" ? "assessment" :
         selectedType === "management_meeting" ? "management_meeting" : "service_meeting";
 
-      const analyzeResult = await analyzeAudioDirect(files, analysisType);
+      let analyzeResult;
+
+      if (hasLargeFile) {
+        // --- R2 Route (Bypass Vercel) ---
+        setProcessMessage(`大きなファイルを検出しました。クラウド経由でアップロード中...`);
+        const fileKeys: string[] = [];
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          setProcessMessage(`アップロード中 (${i + 1}/${files.length}): ${file.name}`);
+
+          // Get Presigned URL
+          const { upload_url, file_key } = await getPresignedUrl(file.name, file.type);
+
+          // Upload to R2
+          await uploadToR2(upload_url, file);
+          fileKeys.push(file_key);
+        }
+
+        setProcessMessage("AI分析中... (クラウド上のファイルを処理)");
+        analyzeResult = await analyzeAudio(fileKeys, analysisType);
+
+      } else {
+        // --- Direct Route (Existing, faster for small files) ---
+        analyzeResult = await analyzeAudioDirect(files, analysisType);
+      }
 
       if (!analyzeResult.success) {
         throw new Error(analyzeResult.error || "分析失敗");
@@ -507,37 +520,8 @@ export default function Home() {
 
       {/* Main Content */}
       <div className="flex-1">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
-            {/* Left: Logo (Fixed) */}
-            <div className="flex flex-col items-center justify-center gap-0 w-auto flex-shrink-0">
-              <img src="/icon.jpg" alt="カカナイ" className="w-8 h-8 rounded-lg" />
-              <h1 className="text-[10px] font-bold text-gray-900 leading-none mt-0.5 whitespace-nowrap">カカナイ</h1>
-            </div>
-
-            {/* Center: Tools (Scrollable) */}
-            <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar min-w-0 px-1">
-              <Link href="/genogram" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">ジェノグラム</Link>
-              <Link href="/body-map" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">身体図</Link>
-              <Link href="/house-plan" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex-shrink-0">家屋図</Link>
-              <Link href="/csv-convert" className="whitespace-nowrap px-2 py-1.5 text-xs md:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm transition-colors flex items-center gap-1 flex-shrink-0">
-                <FileTextIcon className="w-3 h-3" />
-                <span>CSV変換</span>
-              </Link>
-            </div>
-
-            {/* Right: System (Fixed) */}
-            <div className="flex items-center gap-1 flex-shrink-0 border-l border-gray-200 pl-2">
-              <button onClick={() => alert('マニュアルを確認できます')} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 flex-shrink-0" title="マニュアル">
-                <BookOpenIcon />
-              </button>
-              <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 flex-shrink-0" title="設定">
-                <SettingsIcon />
-              </button>
-            </div>
-          </div>
-        </header>
+        {/* Header (Unified) */}
+        <Header showSettingsButton={true} onOpenSettings={() => setShowSettings(true)} />
 
         {/* Main */}
         <main className="max-w-5xl mx-auto px-4 py-4">
