@@ -401,7 +401,8 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
         phase_names = [
             "基本情報・社会基盤（氏名、住所、家族、認定情報など）",
             "医療・経歴（病歴、受診状況、生活歴など）",
-            "心身機能・精神状態（麻痺、感覚、認知症、BPSDなど）",
+            "心身機能（身体状況・麻痺・拘縮・痛み・皮膚・感覚など）",
+            "精神・認知機能（認知症、BPSD、精神症状、判断能力など）",
             "身体ADL（移動、食事、排泄、入浴などの基本動作）",
             "IADL・認知・伝達（家事、金銭管理、コミュニケーション）",
             "サービスの利用状況・社会資源（フォーマル/インフォーマル、頻度、事業者）",
@@ -569,9 +570,34 @@ JSONキー仕様:
     def generate_genogram_data(self, text: str) -> Dict[str, Any]:
         """テキストからジェノグラムデータを生成"""
         prompt = f"""
-以下のテキストから家族情報を抽出し、ジェノグラム（家系図）データを生成してください。
+以下のテキストから家族構成と関係性を抽出し、厳密に指定されたJSON形式で出力してください。
+
 テキスト: {text}
-出力JSON形式: {{ "nodes": [...], "edges": [...] }}
+
+## 出力ルール
+1. **JSON形式**で出力し、キー `nodes` と `edges` を含めること。
+2. `nodes`: 各人物のリスト。
+   - `id`: 一意のID文字列 (例: "p1", "p2")
+   - `data`: {{ "label": "氏名または続柄", "gender": "male" または "female", "deceased": true/false }}
+   - `type`: "person" (固定)
+   - `position`: {{ "x": 0, "y": 0 }} (すべて0でよい)
+3. `edges`: 関係性のリスト。
+   - `id`: 一意のID文字列 (例: "e1")
+   - `source`: 関係元の `id`
+   - `target`: 関係先の `id`
+   - `type`: "marriage" (婚姻/事実婚) または "smoothstep" (親子などそれ以外)
+   - `data`: もしあれば関係の詳細 (例: {{ "label": "離婚" }})
+
+## 出力例
+{{
+  "nodes": [
+    {{ "id": "p1", "type": "person", "data": {{ "label": "本人", "gender": "female", "deceased": false }}, "position": {{ "x": 0, "y": 0 }} }},
+    {{ "id": "p2", "type": "person", "data": {{ "label": "長男", "gender": "male", "deceased": false }}, "position": {{ "x": 0, "y": 0 }} }}
+  ],
+  "edges": [
+    {{ "id": "e1", "source": "p1", "target": "p2", "type": "smoothstep" }}
+  ]
+}}
 """
         response = self._generate_with_retry([prompt])
         text = self._clean_json_response(response.text)
@@ -580,9 +606,34 @@ JSONキー仕様:
     def generate_bodymap_data(self, text: str) -> Dict[str, Any]:
         """テキストから身体図データを生成"""
         prompt = f"""
-以下のテキストから身体状況（マヒ、欠損、機能低下など）を抽出してください。
+以下のテキストから身体状況（マヒ、欠損、機能低下、痛みなど）を抽出し、指定されたJSON形式で出力してください。
+
 テキスト: {text}
-出力JSON形式: {{ "findings": [{{ "part": "...", "condition": "...", "note": "..." }}] }}
+
+## ルール
+1. `findings` というキーを持つJSONオブジェクトを出力してください。
+2. 各findingには以下の要素を含めてください。
+   - `part`: 部位キー (**必ず以下のリストから選択すること**)
+     - head, face, neck
+     - shoulder (肩全体), right_shoulder, left_shoulder
+     - chest (胸部), stomach (腹部)
+     - back (背部), hip (臀部/腰)
+     - arm (腕全体), hand (手)
+     - leg (足全体), right_leg, left_leg
+   - `condition`: 状態の説明 (日本語可。例: "右片麻痺", "褥瘡")
+   - `note`: 詳細なコメント (日本語可)
+
+## 注意
+- 部位 (`part`) は英語のキーである必要があります。「右腕」なら `arm` ではなく `arm` (位置指定がない場合) または近いものを選んでください。迷ったら `chest` (中心) にし、`note`で補足してください。
+- 複数の症状がある場合は、複数のfindingを作成してください。
+
+## 出力例
+{{
+  "findings": [
+    {{ "part": "right_shoulder", "condition": "拘縮", "note": "可動域制限あり" }},
+    {{ "part": "stomach", "condition": "手術痕", "note": "盲腸の手術痕あり" }}
+  ]
+}}
 """
         response = self._generate_with_retry([prompt])
         text = self._clean_json_response(response.text)
