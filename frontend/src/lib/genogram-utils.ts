@@ -3,6 +3,38 @@ import { Node, Edge } from 'reactflow';
 import { Person } from '@/lib/types';
 
 export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } => {
+    // --- New Format Detection (AI Output with nodes/edges) ---
+    if (data.nodes && Array.isArray(data.nodes)) {
+        console.log('Detected NEW AI format (nodes/edges):', data.nodes.length, 'nodes');
+        // Already in ReactFlow-like format, normalize it
+        const nodes: Node[] = data.nodes.map((n: any, idx: number) => ({
+            id: n.id || `node-${idx}`,
+            type: n.type || 'person',
+            position: n.position || { x: 100 + idx * 180, y: 100 },
+            data: {
+                person: {
+                    id: n.id || `node-${idx}`,
+                    name: n.data?.label || '不明',
+                    gender: n.data?.gender === 'male' ? 'M' : n.data?.gender === 'female' ? 'F' : 'U',
+                    isDeceased: n.data?.deceased || false,
+                    isSelf: n.data?.label === '本人',
+                    isKeyPerson: false,
+                    generation: 0,
+                }
+            },
+        }));
+        const edges: Edge[] = (data.edges || []).map((e: any, idx: number) => ({
+            id: e.id || `edge-${idx}`,
+            source: e.source,
+            target: e.target,
+            type: e.type === 'marriage' ? 'straight' : 'smoothstep',
+            style: { stroke: '#333', strokeWidth: 2 },
+        }));
+        return { nodes, edges };
+    }
+
+    // --- Legacy Format (members/marriages) ---
+    console.log('Detected LEGACY format (members/marriages)');
     const nodes: Node[] = [];
     const edges: Edge[] = [];
     const members = data.members || [];

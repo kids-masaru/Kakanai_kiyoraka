@@ -91,6 +91,10 @@ export default function BodyMapEditor() {
     const [showLoadModal, setShowLoadModal] = useState(false);
     const [savedFiles, setSavedFiles] = useState<string[]>([]);
 
+    // Zoom & Pan State
+    const [stageScale, setStageScale] = useState(0.7);
+    const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
+
     const pushHistory = (newData: BodyMapData) => {
         const newHist = history.slice(0, historyIndex + 1);
         newHist.push(newData);
@@ -482,9 +486,35 @@ export default function BodyMapEditor() {
                     width={1400}
                     height={900}
                     ref={stageRef}
+                    scaleX={stageScale}
+                    scaleY={stageScale}
+                    x={stagePosition.x}
+                    y={stagePosition.y}
+                    draggable
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
+                    onWheel={(e) => {
+                        e.evt.preventDefault();
+                        const scaleBy = 1.1;
+                        const oldScale = stageScale;
+                        const pointer = stageRef.current?.getPointerPosition();
+                        if (!pointer) return;
+                        const mousePointTo = {
+                            x: (pointer.x - stagePosition.x) / oldScale,
+                            y: (pointer.y - stagePosition.y) / oldScale,
+                        };
+                        const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
+                        const clampedScale = Math.max(0.3, Math.min(2, newScale));
+                        setStageScale(clampedScale);
+                        setStagePosition({
+                            x: pointer.x - mousePointTo.x * clampedScale,
+                            y: pointer.y - mousePointTo.y * clampedScale,
+                        });
+                    }}
+                    onDragEnd={(e) => {
+                        setStagePosition({ x: e.target.x(), y: e.target.y() });
+                    }}
                 >
                     <Layer>
                         <BodyMapImage />
@@ -565,7 +595,7 @@ export default function BodyMapEditor() {
                 </Stage>
             </div>
 
-            <div className="absolute top-4 right-4 w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden flex flex-col z-40 p-3 max-h-[calc(100vh-6rem)] overflow-y-auto">
+            <div className="absolute top-20 right-4 w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden flex flex-col z-40 p-3 max-h-[calc(100vh-8rem)] overflow-y-auto">
                 <h2 className="text-base font-bold text-gray-800 mb-3 flex items-center gap-2">
                     <span>🖌️</span> 身体図エディタ
                 </h2>
