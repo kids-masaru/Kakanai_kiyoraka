@@ -307,7 +307,7 @@ async def analyze_audio(request: AnalyzeAudioRequest, background_tasks: Backgrou
         result = {}
         if request.analysis_type == "assessment":
             print(f"Starting Assessment Analysis for {len(file_contents)} files...", flush=True)
-            result = ai_service.extract_assessment_info(file_contents)
+            result = await ai_service.extract_assessment_info(file_contents)
             
             # --- Auto-Generation Trigger (Background) ---
             gen_id = str(uuid.uuid4())
@@ -393,7 +393,7 @@ async def analyze_file_direct(
         # 2. 分析実行（統合分析）
         result = {}
         if analysis_type == "assessment":
-            result = ai_service.extract_assessment_info(file_contents)
+            result = await ai_service.extract_assessment_info(file_contents)
             
             # --- Auto-Generation Trigger (Background) ---
             gen_id = str(uuid.uuid4())

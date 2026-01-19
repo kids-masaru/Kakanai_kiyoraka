@@ -8,6 +8,7 @@ import io
 import time
 import re
 import tempfile
+import asyncio
 from pathlib import Path
 from typing import Dict, Any, Optional
 try:
@@ -64,6 +65,25 @@ class AIService:
                         wait_time = float(match.group(1)) + 2
                     if attempt < retries - 1:
                         time.sleep(wait_time)
+                        continue
+                raise e
+
+    async def _generate_with_retry_async(self, prompt_parts, retries=3):
+        """Async version of _generate_with_retry"""
+        model = self._get_model()
+        for attempt in range(retries):
+            try:
+                # Use generate_content_async if available, otherwise wrap in executor
+                return await model.generate_content_async(prompt_parts)
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "quota" in error_str.lower():
+                    wait_time = 32
+                    match = re.search(r"retry in (\d+(\.\d+)?)s", error_str)
+                    if match:
+                        wait_time = float(match.group(1)) + 2
+                    if attempt < retries - 1:
+                        await asyncio.sleep(wait_time)
                         continue
                 raise e
     
@@ -201,25 +221,33 @@ class AIService:
         return combined_mapping
 
     def _categorize_fields(self, all_keys: list[str]) -> list[list[str]]:
-        """フィールドを7つのグループに分類する"""
-        groups = [[], [], [], [], [], [], []]
+        """フィールドを8つのグループに分類する (Phase 3を分割)"""
+        # G1: Basic, G2: Medical, G3a: Body, G3b: Mental, G4: ADL, G5: IADL, G6: Services, G7: Social
+        groups = [[], [], [], [], [], [], [], []]
         
         # Keyword Definitions
         # G1: Basic/Social
         g1_keywords = ["作成", "受付", "相談者", "利用者", "家族", "世帯", "住居", "設備", "年金", "保険", "認定", "障害高齢者", "認知症高齢者", "被保険者"]
         # G2: Medical/History
         g2_keywords = ["経緯", "搬送", "これまでの生活", "生活リズム", "健康", "病名", "薬", "受診", "主治医", "医療機関"]
-        # G3: Body/Mind (Physical Condition, Mental)
-        g3_keywords = ["視力", "聴力", "口腔", "栄養", "身長", "体重", "血圧", "アレルギー", "麻痺", "拘縮", "痛み", "褥瘡", "認知機能", "行動障害", "精神", "阻害要因", "体温", "脈拍"]
+        
+        # G3a: Body (Physical Condition)
+        # Removed "認知機能", "行動障害", "精神", "阻害要因"
+        g3a_keywords = ["視力", "聴力", "口腔", "栄養", "身長", "体重", "血圧", "アレルギー", "麻痺", "拘縮", "痛み", "褥瘡", "体温", "脈拍", "皮膚", "感覚"]
+        
+        # G3b: Mental/Cognitive (New Phase 4)
+        g3b_keywords = ["認知機能", "行動障害", "精神", "阻害要因", "判断能力"]
+        
         # G4: Physical ADL (Basic Movement)
         g4_keywords = ["移動", "食事", "水分", "排泄", "入浴", "更衣", "整容", "寝返り", "起き上がり", "立ち上がり", "座位", "立位", "移乗"]
+        
         # G5: IADL/Comm (Cognitive Tasks, Communication)
-        # Added "指示" for 指示反応
         g5_keywords = ["服薬", "調理", "掃除", "洗濯", "買物", "物品", "金銭", "コミュニケーション", "意思", "指示"]
+        
         # G6: Services (Specific Service Usage block)
         g6_keywords = ["利用している支援", "社会資源", "フォーマル", "インフォーマル"]
+        
         # G7: Social/Env (Environment & Summary)
-        # Added "参加" explicitly
         g7_keywords = ["社会", "役割", "介護力", "支援", "サービス", "留意", "環境因子", "個人因子", "見通し", "住宅改修", "福祉用具", "社会保障", "参加"]
 
         used_keys = set()
@@ -227,17 +255,10 @@ class AIService:
         for key in all_keys:
             assigned = False
             
-            # Check G6 (Services) FIRST (To prevent '支援' in G7 from catching it)
+            # Use strict ordering to prevent conflicts
+            
+            # G6 (Services)
             for kw in g6_keywords:
-                if kw in key:
-                    groups[5].append(key)
-                    used_keys.add(key)
-                    assigned = True
-                    break
-            if assigned: continue
-
-            # Check G7 (Env)
-            for kw in g7_keywords:
                 if kw in key:
                     groups[6].append(key)
                     used_keys.add(key)
@@ -245,8 +266,26 @@ class AIService:
                     break
             if assigned: continue
 
-            # Check G5
+            # G7 (Env)
+            for kw in g7_keywords:
+                if kw in key:
+                    groups[7].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # G5 (IADL)
             for kw in g5_keywords:
+                if kw in key:
+                    groups[5].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # G4 (ADL)
+            for kw in g4_keywords:
                 if kw in key:
                     groups[4].append(key)
                     used_keys.add(key)
@@ -254,8 +293,8 @@ class AIService:
                     break
             if assigned: continue
 
-            # Check G4
-            for kw in g4_keywords:
+            # G3b (Mental)
+            for kw in g3b_keywords:
                 if kw in key:
                     groups[3].append(key)
                     used_keys.add(key)
@@ -263,8 +302,8 @@ class AIService:
                     break
             if assigned: continue
 
-            # Check G3
-            for kw in g3_keywords:
+            # G3a (Body)
+            for kw in g3a_keywords:
                 if kw in key:
                     groups[2].append(key)
                     used_keys.add(key)
@@ -272,7 +311,7 @@ class AIService:
                     break
             if assigned: continue
 
-            # Check G2
+            # G2 (Medical)
             for kw in g2_keywords:
                 if kw in key:
                     groups[1].append(key)
@@ -281,7 +320,7 @@ class AIService:
                     break
             if assigned: continue
 
-            # Check G1
+            # G1 (Basic)
             for kw in g1_keywords:
                 if kw in key:
                     groups[0].append(key)
@@ -290,8 +329,8 @@ class AIService:
                     break
             if assigned: continue
             
-            # Default to G7 if no match
-            groups[6].append(key)
+            # Default to G7 (Last group)
+            groups[7].append(key)
         
         return groups
 
@@ -391,13 +430,14 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
 値が見つからない場合は空文字 "" にしてください（推測で埋めないでください）。
 """
 
-    def extract_assessment_info(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
-        """アセスメント情報を7段階で抽出して統合"""
+    async def extract_assessment_info(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
+        """アセスメント情報を8段階で抽出して統合 (Async/Parallel Version)"""
         
         # 1. 準備：マッピング読み込みとグループ化
         full_mapping = self._load_all_mappings()
         all_keys = list(full_mapping.keys())
         field_groups = self._categorize_fields(all_keys)
+        # Note: phase_names must match the 8 groups returned by _categorize_fields
         phase_names = [
             "基本情報・社会基盤（氏名、住所、家族、認定情報など）",
             "医療・経歴（病歴、受診状況、生活歴など）",
@@ -415,38 +455,54 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
         uploaded_files, tmp_paths = self._upload_files_to_gemini(file_contents)
         
         try:
-            # 3. 7段階の抽出実行
+            # 3. 8段階の並列実行
+            tasks = []
+            valid_phases = [] # Keep track of which phase corresponds to which task
+            
             for i, fields in enumerate(field_groups):
                 if not fields:
                     continue
                 
-                print(f"DEBUG: Starting Assessment Phase {i+1}/7: {phase_names[i]} ({len(fields)} fields)", flush=True)
+                print(f"DEBUG: Preparing Assessment Phase {i+1}/8: {phase_names[i]} ({len(fields)} fields)", flush=True)
                 
-                # プロンプト生成
+                # プロンプト生成 (Sync operation is fast)
                 prompt = self._generate_partial_prompt(fields, full_mapping, phase_names[i])
                 
-                # API実行
-                try:
-                    # _generate_with_retry はモデル取得も内部でやるので再利用可
-                    response = self._generate_with_retry([*uploaded_files, prompt])
-                    partial_result = self._parse_json_result(response.text)
-                    
-                    # 結果をマージ
-                    if isinstance(partial_result, dict):
-                        master_result.update(partial_result)
-                        print(f"DEBUG: Phase {i+1} completed. Merged {len(partial_result)} keys.", flush=True)
-                    else:
-                        print(f"WARNING: Phase {i+1} returned non-dict result: {type(partial_result)}", flush=True)
-                        
-                except Exception as e:
-                    print(f"ERROR: Phase {i+1} failed: {e}", flush=True)
-                    # 1つのフェーズが失敗しても他は続ける
+                # Create Task
+                task = self._generate_with_retry_async([*uploaded_files, prompt])
+                tasks.append(task)
+                valid_phases.append(i + 1)
+
+            print(f"DEBUG: Executing {len(tasks)} phases in parallel...", flush=True)
+            responses = await asyncio.gather(*tasks, return_exceptions=True)
             
+            # Process Results
+            for idx, response in enumerate(responses):
+                phase_num = valid_phases[idx]
+                if isinstance(response, Exception):
+                    print(f"ERROR: Phase {phase_num} failed: {response}", flush=True)
+                else:
+                    try:
+                        partial_result = self._parse_json_result(response.text)
+                        if isinstance(partial_result, dict):
+                            master_result.update(partial_result)
+                            print(f"DEBUG: Phase {phase_num} completed. Merged {len(partial_result)} keys.", flush=True)
+                        else:
+                            print(f"WARNING: Phase {phase_num} returned non-dict result", flush=True)
+                    except Exception as e:
+                        print(f"ERROR: Phase {phase_num} parse failed: {e}", flush=True)
+
             return master_result
 
         finally:
             # 4. クリーンアップ
             self._cleanup_files(uploaded_files, tmp_paths)
+
+    # 互換性ラッパー (Sync) - 非推奨だが残す
+    def extract_assessment_info_sync(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(self.extract_assessment_info(file_contents))
 
     # 互換性のために残す（中身は新メソッド呼出）
     def extract_from_pdf(self, pdf_data: bytes, mime_type: str) -> Dict[str, Any]:
