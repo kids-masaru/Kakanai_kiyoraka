@@ -101,6 +101,8 @@ export default function Home() {
   const [processMessage, setProcessMessage] = useState<string>("");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [extractionResult, setExtractionResult] = useState<any>(null);
+  const [genogramDraftId, setGenogramDraftId] = useState<string | null>(null);
+  const [bodyMapDraftId, setBodyMapDraftId] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
 
@@ -227,6 +229,8 @@ export default function Home() {
     setProcessMessage(`AI分析中... (${files.length}件のファイルを統合中)`);
     setResultUrl(null);
     setExtractionResult(null);
+    setGenogramDraftId(null);
+    setBodyMapDraftId(null);
 
     try {
       // 1. Check file sizes for R2 route
@@ -268,6 +272,8 @@ export default function Home() {
         throw new Error(analyzeResult.error || "分析失敗");
       }
       setExtractionResult(analyzeResult.data);
+      if (analyzeResult.genogram_draft_id) setGenogramDraftId(analyzeResult.genogram_draft_id);
+      if (analyzeResult.bodymap_draft_id) setBodyMapDraftId(analyzeResult.bodymap_draft_id);
 
       // 2. Write
       setProcessStatus("writing");
@@ -640,6 +646,18 @@ export default function Home() {
                     📊 シートを開く ↗
                   </a>
                 )}
+                <div className="flex flex-wrap gap-2 justify-center mt-3">
+                  {genogramDraftId && (
+                    <Link href={`/genogram?draft_id=${genogramDraftId}`} target="_blank" className="inline-flex items-center px-4 py-2 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg shadow-sm hover:bg-purple-100 transition-colors">
+                      🧬 ジェノグラム案を見る
+                    </Link>
+                  )}
+                  {bodyMapDraftId && (
+                    <Link href={`/body-map?draft_id=${bodyMapDraftId}`} target="_blank" className="inline-flex items-center px-4 py-2 bg-pink-50 text-pink-700 border border-pink-200 rounded-lg shadow-sm hover:bg-pink-100 transition-colors">
+                      🧘 身体図案を見る
+                    </Link>
+                  )}
+                </div>
               </div>
             )}
 

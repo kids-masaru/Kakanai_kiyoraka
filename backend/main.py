@@ -2,12 +2,14 @@
 Kakanai v2 - FastAPI Backend
 介護業務DX バックエンドAPI
 """
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
 from dotenv import load_dotenv
+import uuid
+import json
 
 # Load environment variables
 load_dotenv()
@@ -67,12 +69,16 @@ class AnalyzeAudioRequest(BaseModel):
     file_key: Optional[str] = None
     file_keys: Optional[List[str]] = None
     analysis_type: str = "assessment"  # assessment, meeting, qa
+    # Optional filenames to rename uploads in Drive
+    filenames: Optional[List[str]] = None
 
 
 class AnalyzeResponse(BaseModel):
     success: bool
     data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    genogram_draft_id: Optional[str] = None
+    bodymap_draft_id: Optional[str] = None
 
 
 class SheetsWriteRequest(BaseModel):
@@ -100,12 +106,69 @@ class SheetsWriteRequest(BaseModel):
     reception_method: str = ""     # 受付方法
 
 
+class GenogramGenerateRequest(BaseModel):
+    text: str
+    type: str = "genogram" # genogram or body_map
+
+
 class GenogramRequest(BaseModel):
     text: str
 
-
 class BodyMapRequest(BaseModel):
     text: str
+
+
+# --- Background Tasks ---
+
+def run_background_generation(text_data: str, genogram_id: str, bodymap_id: str):
+    """
+    バックグラウンドでジェノグラムと身体図のデータを生成し、R2に保存する
+    """
+    print(f"Background: Starting generation for IDs {genogram_id}, {bodymap_id}", flush=True)
+    try:
+        # 1. Genogram Generation
+        if genogram_id:
+            try:
+                print("Background: Generating Genogram...", flush=True)
+                genogram_data = ai_service.generate_genogram_data(text_data)
+                # Save to R2 with specific key (drafts/{id}.json)
+                key = f"drafts/{genogram_id}.json"
+                json_bytes = json.dumps(genogram_data, ensure_ascii=False).encode("utf-8")
+                
+                # Use storage_service.s3_client directly to control key
+                if storage_service.s3_client:
+                    storage_service.s3_client.put_object(
+                        Bucket=storage_service.bucket_name,
+                        Key=key,
+                        Body=json_bytes,
+                        ContentType="application/json"
+                    )
+                    print(f"Background: Genogram draft saved to {key}", flush=True)
+            except Exception as e:
+                print(f"Background Error (Genogram): {e}", flush=True)
+
+        # 2. BodyMap Generation
+        if bodymap_id:
+            try:
+                print("Background: Generating BodyMap...", flush=True)
+                bodymap_data = ai_service.generate_bodymap_data(text_data)
+                # Save to R2
+                key = f"drafts/{bodymap_id}.json"
+                json_bytes = json.dumps(bodymap_data, ensure_ascii=False).encode("utf-8")
+                
+                if storage_service.s3_client:
+                    storage_service.s3_client.put_object(
+                        Bucket=storage_service.bucket_name,
+                        Key=key,
+                        Body=json_bytes,
+                        ContentType="application/json"
+                    )
+                    print(f"Background: BodyMap draft saved to {key}", flush=True)
+            except Exception as e:
+                print(f"Background Error (BodyMap): {e}", flush=True)
+
+    except Exception as e:
+        print(f"Background Critical Error: {e}", flush=True)
 
 
 # --- Endpoints ---
@@ -114,6 +177,25 @@ class BodyMapRequest(BaseModel):
 async def health_check():
     """ヘルスチェック"""
     return HealthResponse(status="healthy", version="2.1.0")
+
+
+@app.get("/api/draft/{draft_id}")
+async def get_draft(draft_id: str):
+    """下書きデータを取得"""
+    try:
+        key = f"drafts/{draft_id}.json"
+        try:
+            # R2からファイルを取得 (bytes)
+            data_bytes = storage_service.get_file(key)
+            return json.loads(data_bytes.decode("utf-8"))
+        except Exception:
+            # まだ生成されていないかエラー (404 Not Found)
+            raise HTTPException(status_code=404, detail="Draft not found or not ready")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Get Draft Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/upload/presign", response_model=PresignedUrlResponse)
@@ -156,9 +238,10 @@ async def upload_file_direct(file: UploadFile = File(...)):
 
 
 @app.post("/api/analyze/audio", response_model=AnalyzeResponse)
-async def analyze_audio(request: AnalyzeAudioRequest):
+async def analyze_audio(request: AnalyzeAudioRequest, background_tasks: BackgroundTasks):
     """
     R2経由の分析（複数ファイル対応）
+    Background: Genogram/BodyMap generation for Assessment
     """
     try:
         file_contents = []
@@ -167,51 +250,79 @@ async def analyze_audio(request: AnalyzeAudioRequest):
         if request.file_keys:
             print(f"DEBUG: Processing {len(request.file_keys)} files from R2", flush=True)
             for key in request.file_keys:
-                data = storage_service.get_file(key)
-                # 仮のMIMEタイプ (拡張子から推測できればベストだが、一旦汎用)
-                mime = "audio/mp4" 
-                # R2のキーに拡張子が含まれている場合が多いので、補正ロジックを入れるとベター
-                if key.lower().endswith(".pdf"): mime = "application/pdf"
-                elif key.lower().endswith(".jpg"): mime = "image/jpeg"
-                elif key.lower().endswith(".png"): mime = "image/png"
-                
-                file_contents.append((data, mime))
+                try:
+                    data = storage_service.get_file(key)
+                    # 仮のMIMEタイプ (拡張子から推測)
+                    ext = key.split(".")[-1].lower() if "." in key else "bin"
+                    mime = "application/octet-stream"
+                    if ext in ["mp3", "m4a", "wav"]: mime = f"audio/{ext}"
+                    elif ext == "pdf": mime = "application/pdf"
+                    elif ext in ["jpg", "jpeg", "png"]: mime = f"image/{ext}"
+                    
+                    file_contents.append((data, mime))
+                except Exception as e:
+                    print(f"Error fetching file {key}: {e}", flush=True)
         
         # 2. file_key (単体) の場合 (後方互換)
         elif request.file_key:
             print(f"DEBUG: Processing single file from R2: {request.file_key}", flush=True)
-            data = storage_service.get_file(request.file_key)
-            mime = "audio/mp4"
-            if request.file_key.lower().endswith(".pdf"): mime = "application/pdf"
-            
-            file_contents.append((data, mime))
+            try:
+                data = storage_service.get_file(request.file_key)
+                mime = "audio/mp4"
+                if request.file_key.lower().endswith(".pdf"): mime = "application/pdf"
+                file_contents.append((data, mime))
+            except Exception as e:
+                print(f"Error fetching file {request.file_key}: {e}", flush=True)
         
         else:
             raise HTTPException(status_code=400, detail="No file_key or file_keys provided")
 
+        if not file_contents:
+             return AnalyzeResponse(success=False, error="No accessible files found")
+
         # 1.5 Google Driveへの自動保存 (会議系のみ・R2経由分)
         if request.analysis_type in ["management_meeting", "service_meeting"]:
-            folder_id = drive_service.get_folder_id_by_type(request.analysis_type)
-            if folder_id:
-                print(f"DEBUG: Uploading {len(file_contents)} files from R2 to Drive Folder: {folder_id}", flush=True)
-                for i, (data, mime) in enumerate(file_contents):
-                    # ファイル名決定 (優先度: filenames > file_keys > file_key > default)
-                    fname = f"audio_{i}"
-                    
-                    if request.filenames and i < len(request.filenames):
-                         fname = request.filenames[i]
-                    elif request.file_keys and i < len(request.file_keys):
-                        fname = request.file_keys[i]
-                    elif request.file_key:
-                        fname = request.file_key
-                    
-                    drive_service.upload_file(data, fname, mime, folder_id)
-            else:
-                print(f"DEBUG: No folder ID configured for {request.analysis_type}, skipping upload", flush=True)
+            try:
+                folder_id = drive_service.get_folder_id_by_type(request.analysis_type)
+                if folder_id:
+                    print(f"DEBUG: Uploading {len(file_contents)} files from R2 to Drive Folder: {folder_id}", flush=True)
+                    for i, (data, mime) in enumerate(file_contents):
+                        # ファイル名決定 (優先度: filenames > file_keys > file_key > default)
+                        fname = f"audio_{i}"
+                        
+                        if request.filenames and i < len(request.filenames):
+                             fname = request.filenames[i]
+                        elif request.file_keys and i < len(request.file_keys):
+                            fname = request.file_keys[i]
+                        elif request.file_key:
+                            fname = request.file_key
+                        
+                        drive_service.upload_file(io.BytesIO(data), fname, mime, folder_id)
+                else:
+                    print(f"DEBUG: No folder ID configured for {request.analysis_type}, skipping upload", flush=True)
+            except Exception as e:
+                 print(f"Drive Upload Error: {e}", flush=True)
 
         # 分析タイプに応じて処理
+        result = {}
         if request.analysis_type == "assessment":
+            print(f"Starting Assessment Analysis for {len(file_contents)} files...", flush=True)
             result = ai_service.extract_assessment_info(file_contents)
+            
+            # --- Auto-Generation Trigger (Background) ---
+            gen_id = str(uuid.uuid4())
+            body_id = str(uuid.uuid4())
+            result_text = json.dumps(result, ensure_ascii=False)
+            
+            background_tasks.add_task(run_background_generation, result_text, gen_id, body_id)
+            
+            return AnalyzeResponse(
+                success=True, 
+                data=result,
+                genogram_draft_id=gen_id,
+                bodymap_draft_id=body_id
+            )
+
         elif request.analysis_type == "management_meeting":
             result = ai_service.generate_management_meeting_summary(file_contents)
         elif request.analysis_type == "service_meeting":
@@ -226,18 +337,17 @@ async def analyze_audio(request: AnalyzeAudioRequest):
         return AnalyzeResponse(success=True, data=result)
     except Exception as e:
         print(f"ERROR: analyze_audio failed: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return AnalyzeResponse(success=False, error=str(e))
 
-
-# ユニバーサル分析エンドポイント（名前は互換性のために analyze/audio/direct も残すか、Frontendを変える）
-# Frontendを /api/analyze/direct に変更する方針で実装
-from typing import List
 
 # ユニバーサル分析エンドポイント（名前は互換性のために analyze/audio/direct も残すか、Frontendを変える）
 # Frontendを /api/analyze/direct に変更する方針で実装
 @app.post("/api/analyze/direct", response_model=AnalyzeResponse)
 @app.post("/api/analyze/audio/direct", response_model=AnalyzeResponse) # 互換性エイリアス
 async def analyze_file_direct(
+    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(...),
     analysis_type: str = Form("assessment")
 ):
@@ -246,6 +356,7 @@ async def analyze_file_direct(
     - 音声、PDF、画像を受け入れ（複数可）
     - 運営会議/サービス会議ならDriveへ保存（全ファイル）
     - 全ファイルを統合して分析実行
+    - AssessmentならバックグラウンドでGenogram/BodyMap生成
     """
     try:
         print(f"DEBUG: analyze_file_direct called with {len(files)} files, type={analysis_type}", flush=True)
@@ -265,25 +376,40 @@ async def analyze_file_direct(
                 elif fname.endswith(".m4a") or fname.endswith(".mp4"): mime_type = "audio/mp4"
                 elif fname.endswith(".mp3"): mime_type = "audio/mpeg"
 
-            print(f"DEBUG: File {file.filename} size: {len(content)} bytes, Mime: {mime_type}", flush=True)
             file_contents.append((content, mime_type))
 
             # 1. Google Driveへの自動保存 (会議系のみ)
             if analysis_type in ["management_meeting", "service_meeting"]:
-                folder_id = drive_service.get_folder_id_by_type(analysis_type)
-                if folder_id:
-                    print(f"DEBUG: Uploading to Drive Folder: {folder_id}", flush=True)
-                    success, link = drive_service.upload_file(content, file.filename, mime_type, folder_id)
-                    if success:
-                        print(f"DEBUG: Drive Upload Success: {link}", flush=True)
+                try:
+                    folder_id = drive_service.get_folder_id_by_type(analysis_type)
+                    if folder_id:
+                        print(f"DEBUG: Uploading to Drive Folder: {folder_id}", flush=True)
+                        drive_service.upload_file(io.BytesIO(content), file.filename, mime_type, folder_id)
                     else:
-                        print("DEBUG: Drive Upload Failed", flush=True)
-                else:
-                    print(f"DEBUG: No folder ID configured for {analysis_type}, skipping upload", flush=True)
+                        print(f"DEBUG: No folder ID for {analysis_type}", flush=True)
+                except Exception as e:
+                     print(f"Drive Upload Error (Direct): {e}", flush=True)
 
         # 2. 分析実行（統合分析）
+        result = {}
         if analysis_type == "assessment":
             result = ai_service.extract_assessment_info(file_contents)
+            
+            # --- Auto-Generation Trigger (Background) ---
+            gen_id = str(uuid.uuid4())
+            body_id = str(uuid.uuid4())
+            result_text = json.dumps(result, ensure_ascii=False)
+            
+            background_tasks.add_task(run_background_generation, result_text, gen_id, body_id)
+            
+            print(f"DEBUG: Analysis complete, Background tasks started. GenID={gen_id}", flush=True)
+            return AnalyzeResponse(
+                success=True, 
+                data=result, 
+                genogram_draft_id=gen_id, 
+                bodymap_draft_id=body_id
+            )
+
         elif analysis_type == "management_meeting":
             result = ai_service.generate_management_meeting_summary(file_contents)
         elif analysis_type == "service_meeting":

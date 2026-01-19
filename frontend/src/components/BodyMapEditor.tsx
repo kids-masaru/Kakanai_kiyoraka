@@ -8,6 +8,7 @@ import LZString from 'lz-string';
 import AIInputPanel from './AIInputPanel';
 import { useEditor } from '@/context/EditorContext';
 import Header from './Header';
+import { getDraft } from '@/lib/api';
 
 // --- Types ---
 export type MarkerType = 'Paralysis' | 'Missing' | 'FunctionLoss' | 'Comment';
@@ -128,8 +129,19 @@ export default function BodyMapEditor() {
             } else {
                 // No context data, check URL
                 const params = new URLSearchParams(window.location.search);
+                const draftId = params.get('draft_id');
                 const encodedData = params.get('data');
-                if (encodedData) {
+
+                if (draftId) {
+                    getDraft(draftId).then(draftData => {
+                        console.log("Draft loaded:", draftData);
+                        handleAIGenerate(draftData);
+                    }).catch(e => {
+                        console.error("Failed to load draft:", e);
+                        alert("下書きの読み込みに失敗しました");
+                        pushHistory(data);
+                    });
+                } else if (encodedData) {
                     try {
                         const jsonStr = LZString.decompressFromEncodedURIComponent(encodedData);
                         if (jsonStr) {
@@ -145,6 +157,7 @@ export default function BodyMapEditor() {
                         }
                     } catch (e) {
                         console.error("Failed to parse URL data", e);
+                        pushHistory(data);
                     }
                 } else {
                     // Initialize with default

@@ -37,6 +37,7 @@ const initialEdges: Edge[] = [];
 
 import { useEditor } from '@/context/EditorContext';
 import Header from '@/components/Header';
+import { getDraft } from '@/lib/api';
 
 // ... (Imports)
 
@@ -94,47 +95,75 @@ function GenogramEditorContent() {
   const loadedDataRef = useRef<string | null>(null);
 
   // URL Params Loading (Combined Logic)
+  // URL Params Loading
   useEffect(() => {
     const dataParam = searchParams?.get('data');
-    if (dataParam && dataParam !== loadedDataRef.current) {
-      try {
-        console.log('Param changed, loading data...');
-        const decompressed = LZString.decompressFromEncodedURIComponent(dataParam);
-        if (decompressed) {
-          console.log('Data loaded from URL');
-          loadedDataRef.current = dataParam;
+    const draftId = searchParams?.get('draft_id');
 
-          const jsonData = JSON.parse(decompressed);
+    const load = async () => {
+      if (draftId && draftId !== loadedDataRef.current) {
+        try {
+          console.log('Loading draft:', draftId);
+          const jsonData = await getDraft(draftId);
+          loadedDataRef.current = draftId; // Mark as loaded
 
-          // Check for Combined Data Format
-          if (jsonData.genogram || jsonData.bodyMap) {
-            if (jsonData.genogram) {
-              const { nodes: newNodes, edges: newEdges } = convertToReactFlow(jsonData.genogram);
-              setNodes(newNodes);
-              setEdges(newEdges);
-              setGenogramData({ nodes: newNodes, edges: newEdges });
-            }
-            if (jsonData.bodyMap) {
-              setBodyMapData(jsonData.bodyMap);
-            }
-            // House plan if needed
+          // Draft data is usually raw JSON from AI, needs conversion
+          // Check if it already has nodes/edges (unlikely for AI output but possible if saved draft)
+          if (jsonData.nodes && jsonData.edges) {
+            setNodes(jsonData.nodes);
+            setEdges(jsonData.edges);
+            setGenogramData(jsonData);
           } else {
-            // Legacy Format (Just Genogram data directly)
+            // Convert AI output to ReactFlow
             const { nodes: newNodes, edges: newEdges } = convertToReactFlow(jsonData);
             setNodes(newNodes);
             setEdges(newEdges);
             setGenogramData({ nodes: newNodes, edges: newEdges });
           }
-
-          setTimeout(() => {
-            fitView({ padding: 0.2 });
-            // takeSnapshot(newNodes, newEdges); // Difficulty accessing newNodes here without var
-          }, 500);
+          setTimeout(() => fitView({ padding: 0.2 }), 500);
+        } catch (e) {
+          console.error('Draft load error:', e);
+          alert('下書きの読み込みに失敗しました');
         }
-      } catch (e) {
-        console.error('Failed to parse data from URL', e);
+      } else if (dataParam && dataParam !== loadedDataRef.current) {
+        try {
+          console.log('Param changed, loading data...');
+          const decompressed = LZString.decompressFromEncodedURIComponent(dataParam);
+          if (decompressed) {
+            console.log('Data loaded from URL');
+            loadedDataRef.current = dataParam;
+
+            const jsonData = JSON.parse(decompressed);
+
+            // Check for Combined Data Format
+            if (jsonData.genogram || jsonData.bodyMap) {
+              if (jsonData.genogram) {
+                const { nodes: newNodes, edges: newEdges } = convertToReactFlow(jsonData.genogram);
+                setNodes(newNodes);
+                setEdges(newEdges);
+                setGenogramData({ nodes: newNodes, edges: newEdges });
+              }
+              if (jsonData.bodyMap) {
+                setBodyMapData(jsonData.bodyMap);
+              }
+            } else {
+              // Legacy Format (Just Genogram data directly)
+              const { nodes: newNodes, edges: newEdges } = convertToReactFlow(jsonData);
+              setNodes(newNodes);
+              setEdges(newEdges);
+              setGenogramData({ nodes: newNodes, edges: newEdges });
+            }
+
+            setTimeout(() => {
+              fitView({ padding: 0.2 });
+            }, 500);
+          }
+        } catch (e) {
+          console.error('Failed to parse data from URL', e);
+        }
       }
-    }
+    };
+    load();
   }, [searchParams, setNodes, setEdges, fitView, setGenogramData, setBodyMapData]);
 
   // キーボードショートカット

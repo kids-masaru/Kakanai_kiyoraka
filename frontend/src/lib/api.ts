@@ -13,6 +13,8 @@ export interface AnalyzeResponse {
     success: boolean;
     data?: Record<string, unknown>;
     error?: string;
+    genogram_draft_id?: string;
+    bodymap_draft_id?: string;
 }
 
 /**
@@ -253,5 +255,16 @@ export async function generateBodymap(text: string): Promise<AnalyzeResponse> {
         body: JSON.stringify({ text }),
     });
 
+    return response.json();
+}
+
+/**
+ * Get draft data by ID
+ */
+export async function getDraft(draftId: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/api/draft/${draftId}`);
+    if (!response.ok) {
+        throw new Error('Failed to fetch draft');
+    }
     return response.json();
 }
