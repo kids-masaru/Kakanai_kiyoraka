@@ -297,7 +297,7 @@ async def analyze_audio(request: AnalyzeAudioRequest, background_tasks: Backgrou
                         elif request.file_key:
                             fname = request.file_key
                         
-                        drive_service.upload_file(io.BytesIO(data), fname, mime, folder_id)
+                        drive_service.upload_file(data, fname, mime, folder_id)
                 else:
                     print(f"DEBUG: No folder ID configured for {request.analysis_type}, skipping upload", flush=True)
             except Exception as e:
