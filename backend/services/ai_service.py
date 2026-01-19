@@ -476,11 +476,15 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
             print(f"DEBUG: Executing {len(tasks)} phases in parallel...", flush=True)
             responses = await asyncio.gather(*tasks, return_exceptions=True)
             
-            # Process Results
+            # Process Results with Retry for Parse Failures
+            failed_phases = []  # (phase_num, prompt) for retry
+            prompt_map = {}  # Store prompts for potential retry
+            
+            # First pass: Process all responses
             for idx, response in enumerate(responses):
                 phase_num = valid_phases[idx]
                 if isinstance(response, Exception):
-                    print(f"ERROR: Phase {phase_num} failed: {response}", flush=True)
+                    print(f"ERROR: Phase {phase_num} API failed: {response}", flush=True)
                 else:
                     try:
                         partial_result = self._parse_json_result(response.text)
@@ -489,8 +493,35 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
                             print(f"DEBUG: Phase {phase_num} completed. Merged {len(partial_result)} keys.", flush=True)
                         else:
                             print(f"WARNING: Phase {phase_num} returned non-dict result", flush=True)
+                            failed_phases.append((phase_num, idx))
                     except Exception as e:
-                        print(f"ERROR: Phase {phase_num} parse failed: {e}", flush=True)
+                        print(f"ERROR: Phase {phase_num} parse failed: {e} - Will retry", flush=True)
+                        failed_phases.append((phase_num, idx))
+            
+            # Retry Logic (max 2 attempts per failed phase)
+            max_retries = 2
+            for phase_num, original_idx in failed_phases:
+                # Reconstruct prompt for this phase
+                i = phase_num - 1
+                if i >= len(field_groups):
+                    continue
+                fields = field_groups[i]
+                prompt = self._generate_partial_prompt(fields, full_mapping, phase_names[i])
+                
+                for attempt in range(1, max_retries + 1):
+                    print(f"DEBUG: Retrying Phase {phase_num} (attempt {attempt}/{max_retries})...", flush=True)
+                    try:
+                        await asyncio.sleep(1)  # Small delay before retry
+                        retry_response = await self._generate_with_retry_async([*uploaded_files, prompt])
+                        partial_result = self._parse_json_result(retry_response.text)
+                        if isinstance(partial_result, dict):
+                            master_result.update(partial_result)
+                            print(f"DEBUG: Phase {phase_num} RETRY successful. Merged {len(partial_result)} keys.", flush=True)
+                            break  # Success, exit retry loop
+                    except Exception as e:
+                        print(f"ERROR: Phase {phase_num} retry {attempt} failed: {e}", flush=True)
+                        if attempt == max_retries:
+                            print(f"ERROR: Phase {phase_num} exhausted all retries.", flush=True)
 
             return master_result
 
