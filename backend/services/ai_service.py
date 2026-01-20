@@ -221,48 +221,106 @@ class AIService:
         return combined_mapping
 
     def _categorize_fields(self, all_keys: list[str]) -> list[list[str]]:
-        """フィールドを10個のグループに分類する (Phase 1, 5を分割)"""
-        # G0: Basic (Admin), G1: Basic (Desc), G2: Medical, G3: Body, G4: Mental,
-        # G5: ADL (Major/Self), G6: ADL (Action), G7: IADL, G8: Services, G9: Env
-        groups = [[] for _ in range(10)]
+        """フィールドを13個のグループに分類する (Phase 3を2分割, Phase 10を3分割)"""
+        # G0: Basic (Admin)
+        # G1: Basic (Desc)
+        # G2: Medical (Admin) [Phase 3a]
+        # G3: Medical (History) [Phase 3b]
+        # G4: Body [Original G3]
+        # G5: Mental [Original G4]
+        # G6: ADL Major [Original G5]
+        # G7: ADL Action [Original G6]
+        # G8: IADL [Original G7]
+        # G9: Services [Original G8]
+        # G10: Housing [Phase 10a]
+        # G11: Social/Care [Phase 10b]
+        # G12: Remarks/ICF [Phase 10c]
+        
+        groups = [[] for _ in range(13)]
         
         # Keyword Definitions
-        # G0: Basic (Admin) - Short text
+        
+        # G0: Basic (Admin)
         g0_keywords = ["作成", "受付", "相談者", "利用者", "住居", "設備", "年金", "保険", "認定", "障害高齢者", "認知症高齢者", "被保険者", "氏名", "住所", "連絡先"]
         
-        # G1: Basic (Desc) - Long text
+        # G1: Basic (Desc)
         g1_keywords = ["主訴", "意向", "家族", "世帯", "状況や関わり", "介護者"]
 
-        # G2: Medical/History
-        g2_keywords = ["経緯", "搬送", "これまでの生活", "生活リズム", "健康", "病名", "薬", "受診", "主治医", "医療機関"]
+        # G2: Medical (Admin) - Phase 3a
+        g2_keywords = ["健康", "病名", "薬", "受診", "主治医", "医療機関", "負担割合"]
+
+        # G3: Medical (History) - Phase 3b
+        g3_keywords = ["経緯", "搬送", "これまでの生活", "生活リズム", "状況"]
         
-        # G3: Body (Physical Condition)
-        g3_keywords = ["視力", "聴力", "口腔", "栄養", "身長", "体重", "血圧", "アレルギー", "麻痺", "拘縮", "痛み", "褥瘡", "体温", "脈拍", "皮膚", "感覚"]
+        # G4: Body (Physical)
+        g4_keywords = ["視力", "聴力", "口腔", "栄養", "身長", "体重", "血圧", "アレルギー", "麻痺", "拘縮", "痛み", "褥瘡", "体温", "脈拍", "皮膚", "感覚"]
         
-        # G4: Mental/Cognitive
-        g4_keywords = ["認知機能", "行動障害", "精神", "阻害要因", "判断能力"]
+        # G5: Mental
+        g5_keywords = ["認知機能", "行動障害", "精神", "阻害要因", "判断能力"]
         
-        # G5: ADL (Major/Self)
-        g5_keywords = ["移動", "食事", "水分", "排泄"]
+        # G6: ADL Major
+        g6_keywords = ["移動", "食事", "水分", "排泄"]
         
-        # G6: ADL (Action/Other)
-        g6_keywords = ["入浴", "更衣", "整容", "寝返り", "起き上がり", "立ち上がり", "座位", "立位", "移乗"]
+        # G7: ADL Action
+        g7_keywords = ["入浴", "更衣", "整容", "寝返り", "起き上がり", "立ち上がり", "座位", "立位", "移乗"]
         
-        # G7: IADL/Comm
-        g7_keywords = ["服薬", "調理", "掃除", "洗濯", "買物", "物品", "金銭", "コミュニケーション", "意思", "指示"]
+        # G8: IADL
+        g8_keywords = ["服薬", "調理", "掃除", "洗濯", "買物", "物品", "金銭", "コミュニケーション", "意思", "指示"]
         
-        # G8: Services
-        g8_keywords = ["利用している支援", "社会資源", "フォーマル", "インフォーマル"]
+        # G9: Services
+        g9_keywords = ["利用している支援", "社会資源", "フォーマル", "インフォーマル"]
         
-        # G9: Social/Env
-        g9_keywords = ["社会", "役割", "介護力", "支援", "サービス", "留意", "環境因子", "個人因子", "見通し", "住宅改修", "福祉用具", "社会保障", "参加"]
+        # G10: Housing - Phase 10a
+        g10_keywords = ["居室", "トイレ", "浴室", "住宅改修", "福祉用具", "エレベーター", "畳", "段差", "手すり", "寝具", "冷暖房", "便器", "浴槽", "シャワー", "所有形態"]
+
+        # G11: Social/Care - Phase 10b
+        g11_keywords = ["社会", "役割", "介護力", "支援", "家族支援", "生活保護", "手帳", "成人後見", "日常生活自立支援"]
+
+        # G12: Remarks/ICF - Phase 10c
+        g12_keywords = ["留意", "環境因子", "個人因子", "見通し", "方針", "虐待", "ターミナル", "医療", "審査会", "特記"]
 
         used_keys = set()
 
         for key in all_keys:
             assigned = False
             
-            # G8 (Services)
+            # G9 (Services)
+            for kw in g9_keywords:
+                if kw in key:
+                    groups[9].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+            
+            # G10 (Housing) - Phase 10a
+            for kw in g10_keywords:
+                if kw in key:
+                    groups[10].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # G12 (Remarks) - Phase 10c (Check specific remarks before generic social)
+            for kw in g12_keywords:
+                if kw in key:
+                    groups[12].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # G11 (Social) - Phase 10b
+            for kw in g11_keywords:
+                if kw in key:
+                    groups[11].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # G8 (IADL)
             for kw in g8_keywords:
                 if kw in key:
                     groups[8].append(key)
@@ -271,34 +329,7 @@ class AIService:
                     break
             if assigned: continue
 
-            # G9 (Env)
-            for kw in g9_keywords:
-                if kw in key:
-                    groups[9].append(key)
-                    used_keys.add(key)
-                    assigned = True
-                    break
-            if assigned: continue
-
-            # G7 (IADL)
-            for kw in g7_keywords:
-                if kw in key:
-                    groups[7].append(key)
-                    used_keys.add(key)
-                    assigned = True
-                    break
-            if assigned: continue
-
-            # G5 (ADL Major)
-            for kw in g5_keywords:
-                if kw in key:
-                    groups[5].append(key)
-                    used_keys.add(key)
-                    assigned = True
-                    break
-            if assigned: continue
-
-            # G6 (ADL Action)
+            # G6 (ADL Major)
             for kw in g6_keywords:
                 if kw in key:
                     groups[6].append(key)
@@ -307,7 +338,25 @@ class AIService:
                     break
             if assigned: continue
 
-            # G4 (Mental)
+            # G7 (ADL Action)
+            for kw in g7_keywords:
+                if kw in key:
+                    groups[7].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # G5 (Mental)
+            for kw in g5_keywords:
+                if kw in key:
+                    groups[5].append(key)
+                    used_keys.add(key)
+                    assigned = True
+                    break
+            if assigned: continue
+
+            # G4 (Body)
             for kw in g4_keywords:
                 if kw in key:
                     groups[4].append(key)
@@ -316,19 +365,19 @@ class AIService:
                     break
             if assigned: continue
 
-            # G3 (Body)
-            for kw in g3_keywords:
+            # G2 (Medical Admin) - Phase 3a
+            for kw in g2_keywords:
                 if kw in key:
-                    groups[3].append(key)
+                    groups[2].append(key)
                     used_keys.add(key)
                     assigned = True
                     break
             if assigned: continue
 
-            # G2 (Medical)
-            for kw in g2_keywords:
+            # G3 (Medical History) - Phase 3b
+            for kw in g3_keywords:
                 if kw in key:
-                    groups[2].append(key)
+                    groups[3].append(key)
                     used_keys.add(key)
                     assigned = True
                     break
@@ -352,8 +401,8 @@ class AIService:
                     break
             if assigned: continue
             
-            # Fallback to Env (G9)
-            groups[9].append(key)
+            # Fallback to Remarks (G12)
+            groups[12].append(key)
         
         return groups
 
@@ -454,24 +503,27 @@ JSON形式で、上記リストの項目名をキーとして出力してくだ�
 """
 
     async def extract_assessment_info(self, file_contents: list[tuple[bytes, str]]) -> Dict[str, Any]:
-        """アセスメント情報を8段階で抽出して統合 (Async/Parallel Version)"""
+        """アセスメント情報を13段階で抽出して統合 (Async/Parallel Version)"""
         
         # 1. 準備：マッピング読み込みとグループ化
         full_mapping = self._load_all_mappings()
         all_keys = list(full_mapping.keys())
         field_groups = self._categorize_fields(all_keys)
-        # Note: phase_names must match the 8 groups returned by _categorize_fields
+        # Note: phase_names must match the 13 groups returned by _categorize_fields
         phase_names = [
             "基本情報・社会基盤（氏名、住所、認定情報など）",
             "基本情報・詳細（主訴、家族状況、意向など）",
-            "医療・経歴（病歴、受診状況、生活歴など）",
-            "心身機能（身体状況・麻痺・拘縮・痛み・皮膚・感覚など）",
-            "精神・認知機能（認知症、BPSD、精神症状、判断能力など）",
-            "身体ADL・主要（移動、食事、排泄）",
-            "身体ADL・動作（入浴、更衣、移乗、姿勢保持など）",
-            "IADL・認知・伝達（家事、金銭管理、コミュニケーション）",
-            "サービスの利用状況・社会資源（フォーマル/インフォーマル、頻度、事業者）",
-            "社会・環境・見通し・留意事項（居住環境、介護力、総合的方針）"
+            "医療・管理（病名、受診状況、保険情報など）",         # Phase 3a
+            "経歴・生活史（生活リズム、これまでの経緯など）",        # Phase 3b
+            "心身機能（身体状況・麻痺・拘縮・痛み・皮膚・感覚など）", # Phase 4 -> 5
+            "精神・認知機能（認知症、BPSD、精神症状、判断能力など）", # Phase 5 -> 6
+            "身体ADL・主要（移動、食事、排泄）",                   # Phase 6 -> 7
+            "身体ADL・動作（入浴、更衣、移乗、姿勢保持など）",       # Phase 7 -> 8
+            "IADL・認知・伝達（家事、金銭管理、コミュニケーション）", # Phase 8 -> 9
+            "サービスの利用状況・社会資源",                        # Phase 9 -> 10
+            "住環境・設備（家屋構造、住宅改修、福祉用具など）",     # Phase 10a -> 11
+            "社会・介護力（社会参加、役割、家族支援など）",         # Phase 10b -> 12
+            "留意事項・方針・見通し・ICF（環境・個人因子など）"      # Phase 10c -> 13
         ]
 
         master_result = {}
