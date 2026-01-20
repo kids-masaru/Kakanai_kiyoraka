@@ -83,11 +83,7 @@ export default function Header({ onOpenSettings, showSettingsButton = false }: H
                         <BookOpenIcon />
                         <span className="text-[10px] leading-none">Manual</span>
                     </a>
-                    {showSettingsButton && (
-                        <button onClick={onOpenSettings} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 flex-shrink-0" title="設定">
-                            <SettingsIcon />
-                        </button>
-                    )}
+                    {/* Settings Button Removed as per client request */}
                 </div>
             </div>
         </header>
