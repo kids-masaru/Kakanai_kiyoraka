@@ -15,9 +15,23 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         const additionalNodes: Node[] = [];
         const rawInputEdges = data.edges || [];
 
-        // Helper to detect sibling edges
+        // Helper to find node label by ID
+        const getNodeLabel = (id: string): string => {
+            const node = validNodes.find((n: any) => n.id === id);
+            return node?.data?.label || node?.data?.person?.name || '';
+        };
+
+        // Helper to detect sibling edges (Label AND Node Name Check)
         const isSiblingEdge = (e: any): boolean => {
-            return e.data?.label && /姉妹|兄弟|兄妹/.test(e.data.label);
+            // Check Edge Label
+            if (e.data?.label && /姉妹|兄弟|兄妹/.test(e.data.label)) return true;
+
+            // Check Target Node Label (if it looks like a sibling name)
+            // e.g., "姉", "義姉", "妹"
+            const targetLabel = getNodeLabel(e.target);
+            if (/^(姉|妹|兄|弟|義姉|義妹|義兄|義弟)/.test(targetLabel)) return true;
+
+            return false;
         };
 
         // Group siblings by the "primary" node (usually source)
@@ -98,11 +112,16 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         rawInputEdges.forEach((e: any, idx: number) => {
             if (isSiblingEdge(e)) return;
 
+            // FORCE Marriage/Straight edges to use Left/Right handles
+            const isMarriage = e.type === 'marriage' || e.type === 'straight';
+
             edges.push({
                 id: e.id || `edge-${idx}`,
                 source: e.source,
                 target: e.target,
-                type: e.type === 'marriage' ? 'straight' : 'smoothstep',
+                type: isMarriage ? 'straight' : 'smoothstep',
+                sourceHandle: isMarriage ? 'right-source' : undefined, // Force Right for Source
+                targetHandle: isMarriage ? 'left-target' : undefined,  // Force Left for Target
                 style: { stroke: '#333', strokeWidth: 2 },
             });
         });
@@ -110,7 +129,7 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         // Combine nodes
         const allNodes = [...validNodes, ...additionalNodes];
 
-        // --- 1. Dynamic Generation Inference via BFS (Updated) ---
+        // --- 1. Dynamic Generation Inference via BFS (Updated for new Logic) ---
         const nodeGenerations: { [id: string]: number } = {};
         const nodeIds = new Set(allNodes.map((n: any) => n.id));
         const finalEdges = edges; // Use our processed edges
@@ -118,13 +137,9 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         // 1. Identify "Roots"
         const hasParent = new Set<string>();
         finalEdges.forEach((e: any) => {
-            // Marriage edges and implicit forks don't count as "parents" in the traditional sense 
-            // BUT for generation calc, we need to trace flow.
-            // Actually, Fork -> Child IS a parent relation.
-            // Marriage Edge: Parent -> Fork (Straight)
-            // Child Edge: Fork -> Child (Smoothstep)
-
-            if (e.target && e.type !== 'marriage' && nodeIds.has(e.target)) {
+            // Marriage edges don't imply "parent" relationship for root detection
+            // Only 'smoothstep' usually implies parent->child (or fork->child)
+            if (e.target && e.type === 'smoothstep' && nodeIds.has(e.target)) {
                 hasParent.add(e.target);
             }
         });
@@ -145,14 +160,8 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
             // Find outgoing edges
             finalEdges.forEach((e: any) => {
                 if (e.source === id && e.target && nodeIds.has(e.target)) {
-                    // Logic: Marriage/Straight = Same Gen (usually partner or parent->fork?), 
-                    // Actually Parent->Fork is "Straight" but should preserve generation? No, Parent is Gen X. Fork is Gen X.
-                    // Fork->Child is Smoothstep. 
-
-                    // Let's refine:
-                    // If straight (marriage/fork-link): Same Gen
-                    // If smoothstep (child-link): Next Gen
-
+                    // Logic: Straight/Marriage = Same Gen
+                    // Smoothstep = Next Gen
                     const isSameGen = e.type === 'straight' || e.type === 'marriage';
                     const nextGen = isSameGen ? gen : gen + 1;
 
@@ -162,7 +171,7 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
                     }
                 }
                 // Handle Undirected Marriage Edges
-                else if (e.type === 'straight' && e.target === id && e.source && nodeIds.has(e.source)) {
+                else if ((e.type === 'straight' || e.type === 'marriage') && e.target === id && e.source && nodeIds.has(e.source)) {
                     const partnerId = e.source;
                     if (!visited.has(partnerId)) {
                         visited.add(partnerId);
