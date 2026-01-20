@@ -6,8 +6,12 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
     // --- New Format Detection (AI Output with nodes/edges) ---
     if (data.nodes && Array.isArray(data.nodes)) {
         console.log('Detected NEW AI format (nodes/edges):', data.nodes.length, 'nodes');
+
+        // Filter out null/undefined nodes first
+        const validNodes = data.nodes.filter((n: any) => n && typeof n === 'object');
+
         // Already in ReactFlow-like format, normalize it
-        const nodes: Node[] = data.nodes.map((n: any, idx: number) => ({
+        const nodes: Node[] = validNodes.map((n: any, idx: number) => ({
             id: n.id || `node-${idx}`,
             type: n.type || 'person',
             position: n.position || { x: 100 + idx * 180, y: 100 },
@@ -15,7 +19,10 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
                 person: {
                     id: n.id || `node-${idx}`,
                     name: n.data?.label || '不明',
-                    gender: n.data?.gender === 'male' ? 'M' : n.data?.gender === 'female' ? 'F' : 'U',
+                    // Safe access to gender with fallback
+                    gender: (n.data && n.data.gender === 'male') ? 'M'
+                        : (n.data && n.data.gender === 'female') ? 'F'
+                            : 'U',
                     isDeceased: n.data?.deceased || false,
                     isSelf: n.data?.label === '本人',
                     isKeyPerson: false,
@@ -23,7 +30,7 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
                 }
             },
         }));
-        const edges: Edge[] = (data.edges || []).map((e: any, idx: number) => ({
+        const edges: Edge[] = (data.edges || []).filter((e: any) => e && e.source && e.target).map((e: any, idx: number) => ({
             id: e.id || `edge-${idx}`,
             source: e.source,
             target: e.target,
