@@ -10,6 +10,55 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         // Filter out null/undefined nodes first
         const validNodes = data.nodes.filter((n: any) => n && typeof n === 'object');
 
+        // Pre-calculation: Dynamic Generation Inference via BFS
+        const nodeGenerations: { [id: string]: number } = {};
+        const nodeIds = new Set(validNodes.map((n: any) => n.id));
+        const rawEdges = data.edges || [];
+
+        // 1. Identify "Roots" (Nodes that are not targets of parent-child relationships)
+        const hasParent = new Set<string>();
+        rawEdges.forEach((e: any) => {
+            if (e.target && e.type !== 'marriage' && nodeIds.has(e.target)) {
+                hasParent.add(e.target);
+            }
+        });
+
+        const roots = validNodes.filter((n: any) => !hasParent.has(n.id));
+
+        // 2. BFS to assign generations
+        const queue: { id: string, gen: number }[] = roots.map((n: any) => ({ id: n.id, gen: 0 }));
+        const visited = new Set<string>(roots.map((n: any) => n.id));
+
+        // Initialize roots
+        roots.forEach((n: any) => { nodeGenerations[n.id] = 0; });
+
+        while (queue.length > 0) {
+            const { id, gen } = queue.shift()!;
+            nodeGenerations[id] = gen; // Update/Confirm generation
+
+            // Find outgoing edges
+            rawEdges.forEach((e: any) => {
+                if (e.source === id && e.target && nodeIds.has(e.target)) {
+                    // Logic: Marriage = Same Gen, Parent-Child = Next Gen
+                    const isMarriage = e.type === 'marriage';
+                    const nextGen = isMarriage ? gen : gen + 1;
+
+                    if (!visited.has(e.target)) {
+                        visited.add(e.target);
+                        queue.push({ id: e.target, gen: nextGen });
+                    }
+                }
+                // Handle Undirected Marriage Edges (if source is wife/target is husband case)
+                else if (e.type === 'marriage' && e.target === id && e.source && nodeIds.has(e.source)) {
+                    const partnerId = e.source;
+                    if (!visited.has(partnerId)) {
+                        visited.add(partnerId);
+                        queue.push({ id: partnerId, gen: gen });
+                    }
+                }
+            });
+        }
+
         // Layout Helper: Group by generation to calculate positions if missing
         const nodesByGen: { [gen: number]: number } = {};
 
@@ -18,7 +67,10 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
             // Safe Person Data Extraction
             // Reuse logic from sanitize or just basic extraction here since sanitize runs later
             const pData = n.data?.person || n.data || {};
-            const gen = typeof pData.generation === 'number' ? pData.generation : 0;
+
+            // PRIORITY: 1. AI provided gen, 2. BFS computed gen, 3. Default 0
+            let gen = typeof pData.generation === 'number' ? pData.generation : nodeGenerations[n.id];
+            if (gen === undefined) gen = 0;
 
             // Count nodes in this generation for X positioning
             const genCount = nodesByGen[gen] || 0;
@@ -27,8 +79,8 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
             // Calculate fallback position (Generation-based Tree)
             // Y: Based on generation (0 is top)
             // X: Centered or staggered based on count
-            const fallbackX = 100 + (genCount * 180);
-            const fallbackY = 100 + (gen * 150);
+            const fallbackX = 100 + (genCount * 220); // Widened spacing
+            const fallbackY = 100 + (gen * 180);
 
             // Use existing position if valid (not 0,0), otherwise fallback
             const hasValidPos = n.position && (n.position.x !== 0 || n.position.y !== 0);
