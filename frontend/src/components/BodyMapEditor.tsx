@@ -490,7 +490,7 @@ export default function BodyMapEditor() {
                     scaleY={stageScale}
                     x={stagePosition.x}
                     y={stagePosition.y}
-                    draggable
+                    draggable={!selectedType}
                     onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
