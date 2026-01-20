@@ -16,9 +16,15 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         const rawEdges = data.edges || [];
 
         // 1. Identify "Roots" (Nodes that are not targets of parent-child relationships)
+        // Helper to detect sibling/兄弟姉妹 edges (treated as same generation)
+        const isSiblingEdge = (e: any): boolean => {
+            // "marriage" type is already same‑generation, plus label based detection for sibling edges
+            return e.type === 'marriage' || (e.data?.label && /姉妹|兄弟|兄妹/.test(e.data.label));
+        };
         const hasParent = new Set<string>();
         rawEdges.forEach((e: any) => {
-            if (e.target && e.type !== 'marriage' && nodeIds.has(e.target)) {
+            // Only treat as a parent relationship when the edge is NOT a sibling edge
+            if (e.target && !isSiblingEdge(e) && nodeIds.has(e.target)) {
                 hasParent.add(e.target);
             }
         });
@@ -39,20 +45,21 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
             // Find outgoing edges
             rawEdges.forEach((e: any) => {
                 if (e.source === id && e.target && nodeIds.has(e.target)) {
-                    // Logic: Marriage = Same Gen, Parent-Child = Next Gen
-                    const isMarriage = e.type === 'marriage';
-                    const nextGen = isMarriage ? gen : gen + 1;
+                    // Treat marriage or sibling edges as same generation
+                    const isSibling = e.type === 'marriage' || (e.data?.label && /姉妹|兄弟|兄妹/.test(e.data.label));
+                    const nextGen = isSibling ? gen : gen + 1;
 
                     if (!visited.has(e.target)) {
                         visited.add(e.target);
                         queue.push({ id: e.target, gen: nextGen });
                     }
                 }
-                // Handle Undirected Marriage Edges (if source is wife/target is husband case)
-                else if (e.type === 'marriage' && e.target === id && e.source && nodeIds.has(e.source)) {
+                // Handle reverse edges for marriage or sibling relationships
+                else if ((e.type === 'marriage' || (e.data?.label && /姉妹|兄弟|兄妹/.test(e.data.label))) && e.target === id && e.source && nodeIds.has(e.source)) {
                     const partnerId = e.source;
                     if (!visited.has(partnerId)) {
                         visited.add(partnerId);
+                        // Same generation as current node
                         queue.push({ id: partnerId, gen: gen });
                     }
                 }
