@@ -111,10 +111,19 @@ function GenogramEditorContent() {
 
           // Draft data is usually raw JSON from AI, needs conversion
           let sanitized;
-          if (jsonData.nodes && jsonData.edges) {
+
+          // Helper: Check if nodes actually have layout (not just 0,0)
+          const hasValidLayout = (data: any) => {
+            if (!data.nodes || !Array.isArray(data.nodes)) return false;
+            // Check if any node has a non-zero position
+            return data.nodes.some((n: any) => n.position && (n.position.x !== 0 || n.position.y !== 0));
+          };
+
+          if (jsonData.nodes && jsonData.edges && hasValidLayout(jsonData)) {
             sanitized = sanitizeGenogramData(jsonData);
           } else {
-            // Convert AI output to ReactFlow
+            // Convert AI output (or re-layout existing data) to ReactFlow
+            // This will apply generation-based layout if positions are missing
             const converted = convertToReactFlow(jsonData);
             sanitized = sanitizeGenogramData(converted);
           }
@@ -141,8 +150,15 @@ function GenogramEditorContent() {
             if (jsonData.genogram || jsonData.bodyMap) {
               if (jsonData.genogram) {
                 let dataToUse = jsonData.genogram;
-                // If data is raw AI format, convert first
-                if (!dataToUse.nodes || !Array.isArray(dataToUse.nodes)) {
+
+                // Helper: Check if nodes actually have layout
+                const hasValidLayout = (data: any) => {
+                  if (!data.nodes || !Array.isArray(data.nodes)) return false;
+                  return data.nodes.some((n: any) => n.position && (n.position.x !== 0 || n.position.y !== 0));
+                };
+
+                // If data requires layout (nodes missing or missing positions)
+                if (!dataToUse.nodes || !Array.isArray(dataToUse.nodes) || !hasValidLayout(dataToUse)) {
                   dataToUse = convertToReactFlow(dataToUse);
                 }
                 const sanitized = sanitizeGenogramData(dataToUse);

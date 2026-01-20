@@ -10,26 +10,52 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         // Filter out null/undefined nodes first
         const validNodes = data.nodes.filter((n: any) => n && typeof n === 'object');
 
+        // Layout Helper: Group by generation to calculate positions if missing
+        const nodesByGen: { [gen: number]: number } = {};
+
         // Already in ReactFlow-like format, normalize it
-        const nodes: Node[] = validNodes.map((n: any, idx: number) => ({
-            id: n.id || `node-${idx}`,
-            type: n.type || 'person',
-            position: n.position || { x: 100 + idx * 180, y: 100 },
-            data: {
-                person: {
-                    id: n.id || `node-${idx}`,
-                    name: n.data?.label || '不明',
-                    // Safe access to gender with fallback
-                    gender: (n.data && n.data.gender === 'male') ? 'M'
-                        : (n.data && n.data.gender === 'female') ? 'F'
-                            : 'U',
-                    isDeceased: n.data?.deceased || false,
-                    isSelf: n.data?.label === '本人',
-                    isKeyPerson: false,
-                    generation: 0,
-                }
-            },
-        }));
+        const nodes: Node[] = validNodes.map((n: any, idx: number) => {
+            // Safe Person Data Extraction
+            // Reuse logic from sanitize or just basic extraction here since sanitize runs later
+            const pData = n.data?.person || n.data || {};
+            const gen = typeof pData.generation === 'number' ? pData.generation : 0;
+
+            // Count nodes in this generation for X positioning
+            const genCount = nodesByGen[gen] || 0;
+            nodesByGen[gen] = genCount + 1;
+
+            // Calculate fallback position (Generation-based Tree)
+            // Y: Based on generation (0 is top)
+            // X: Centered or staggered based on count
+            const fallbackX = 100 + (genCount * 180);
+            const fallbackY = 100 + (gen * 150);
+
+            // Use existing position if valid (not 0,0), otherwise fallback
+            const hasValidPos = n.position && (n.position.x !== 0 || n.position.y !== 0);
+            const position = hasValidPos ? n.position : { x: fallbackX, y: fallbackY };
+
+            return {
+                id: n.id || `node-${idx}`,
+                type: n.type || 'person',
+                position: position,
+                data: {
+                    person: {
+                        id: n.id || `node-${idx}`,
+                        name: pData.label || pData.name || '不明',
+                        // Safe access to gender with fallback
+                        gender: (pData.gender === 'male' || pData.gender === 'M') ? 'M'
+                            : (pData.gender === 'female' || pData.gender === 'F') ? 'F'
+                                : 'U',
+                        isDeceased: pData.deceased || pData.isDeceased || false,
+                        isSelf: pData.isSelf || (pData.label === '本人'),
+                        isKeyPerson: !!pData.isKeyPerson,
+                        generation: gen,
+                        note: pData.note
+                    }
+                },
+            };
+        });
+
         const edges: Edge[] = (data.edges || []).filter((e: any) => e && e.source && e.target).map((e: any, idx: number) => ({
             id: e.id || `edge-${idx}`,
             source: e.source,
@@ -39,6 +65,7 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         }));
         return { nodes, edges };
     }
+
 
     // --- Legacy Format (members/marriages) ---
     console.log('Detected LEGACY format (members/marriages)');
