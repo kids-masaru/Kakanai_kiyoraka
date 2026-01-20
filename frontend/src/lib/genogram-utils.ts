@@ -235,7 +235,15 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
             if (e.target && e.type === 'smoothstep' && nodeIds.has(e.target)) hasParent.add(e.target);
             // Note: Marriage 'straight' edges don't count as parent-child
         });
-        const roots = allNodes.filter((n: any) => !hasParent.has(n.id));
+
+        // Filter roots:
+        // 1. Must not have a parent (incoming smoothstep)
+        // 2. EXCLUDE "Implicit Spouses" we just created -> they should inherit generation from their partner (source)
+        //    Otherwise they default to Gen 0 and drag the line up.
+        const roots = allNodes.filter((n: any) =>
+            !hasParent.has(n.id) &&
+            !n.id.startsWith('implicit-spouse-of-')
+        );
 
         // BFS
         const queue: { id: string, gen: number }[] = roots.map((n: any) => ({ id: n.id, gen: 0 }));
