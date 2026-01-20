@@ -238,11 +238,13 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
 
         // Filter roots:
         // 1. Must not have a parent (incoming smoothstep)
-        // 2. EXCLUDE "Implicit Spouses" we just created -> they should inherit generation from their partner (source)
-        //    Otherwise they default to Gen 0 and drag the line up.
+        // 2. EXCLUDE "Implicit Spouses" -> they inherit from partner.
+        // 3. EXCLUDE "Marriage" nodes -> they should be reached via People (Parents/Partners).
+        //    (Fixes issue where auto-generated marriage nodes became roots and dragged people to Gen 0)
         const roots = allNodes.filter((n: any) =>
             !hasParent.has(n.id) &&
-            !n.id.startsWith('implicit-spouse-of-')
+            !n.id.startsWith('implicit-spouse-of-') &&
+            n.type !== 'marriage'
         );
 
         // BFS
