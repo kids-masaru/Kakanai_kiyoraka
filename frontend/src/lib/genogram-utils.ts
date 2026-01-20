@@ -228,13 +228,29 @@ export const sanitizeGenogramData = (data: any): { nodes: Node[], edges: Edge[] 
         // 2. Data/Person Validation
         // If it's a 'person' type, it MUST have data.person
         if (node.type === 'person') {
-            if (!node.data || !node.data.person) {
-                console.warn(`Node ${id} dropped: Missing person data`);
+            let personData = node.data?.person;
+
+            // FIX: If data.person is missing but we have flat data (AI Output), normalize it
+            if (!personData && node.data) {
+                personData = {
+                    id: node.id || id,
+                    name: node.data.label || node.data.name || '不明',
+                    gender: node.data.gender || 'U',
+                    isDeceased: node.data.deceased || node.data.isDeceased || false,
+                    isSelf: node.data.isSelf || (node.data.label === '本人'),
+                    isKeyPerson: node.data.isKeyPerson || false,
+                    generation: node.data.generation,
+                    note: node.data.note
+                };
+            }
+
+            if (!personData) {
+                console.warn(`Node ${id} dropped: Missing person data`, node);
                 return;
             }
 
             // Validate Person fields
-            const p = node.data.person;
+            const p = personData;
 
             // Ensure optional fields are safe
             const safePerson = {
@@ -242,7 +258,9 @@ export const sanitizeGenogramData = (data: any): { nodes: Node[], edges: Edge[] 
                 id: p.id || id,
                 name: p.name || '不明',
                 // CRITICAL: Ensure gender is valid (M, F, U)
-                gender: (p.gender === 'M' || p.gender === 'F') ? p.gender : 'U',
+                gender: (p.gender === 'male' || p.gender === 'M') ? 'M'
+                    : (p.gender === 'female' || p.gender === 'F') ? 'F'
+                        : 'U',
                 isDeceased: !!p.isDeceased,
                 isSelf: !!p.isSelf,
                 isKeyPerson: !!p.isKeyPerson,
@@ -252,6 +270,8 @@ export const sanitizeGenogramData = (data: any): { nodes: Node[], edges: Edge[] 
             validNodes.push({
                 ...node,
                 id: id,
+                // Reset type to ensure it's 'person' (some AI output might miss it)
+                type: 'person',
                 data: { ...node.data, person: safePerson },
                 // Ensure position is safe
                 position: node.position || { x: 0, y: 0 }
