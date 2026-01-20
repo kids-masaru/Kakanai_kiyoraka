@@ -29,7 +29,7 @@ import RelationshipPanel from '@/components/RelationshipPanel';
 import AIInputPanel from '@/components/AIInputPanel';
 import { Person, Gender, Marriage } from '@/lib/types';
 import { useHistory } from '@/hooks/useHistory';
-import { convertToReactFlow } from '@/lib/genogram-utils';
+import { convertToReactFlow, sanitizeGenogramData } from '@/lib/genogram-utils';
 
 // 初期ノード（サンプル）
 const initialNodes: Node[] = [];
@@ -61,8 +61,10 @@ function GenogramEditorContent() {
   useEffect(() => {
     if (!isRestoredRef.current && genogramData && genogramData.nodes.length > 0) {
       console.log('Restoring from Context:', genogramData.nodes.length, 'nodes');
-      setNodes(genogramData.nodes);
-      setEdges(genogramData.edges);
+      // Sanitize before restoring from context too, just in case
+      const sanitized = sanitizeGenogramData(genogramData);
+      setNodes(sanitized.nodes);
+      setEdges(sanitized.edges);
       isRestoredRef.current = true;
       setTimeout(() => fitView({ padding: 0.2 }), 100);
     } else if (!isRestoredRef.current) {
@@ -108,18 +110,18 @@ function GenogramEditorContent() {
           loadedDataRef.current = draftId; // Mark as loaded
 
           // Draft data is usually raw JSON from AI, needs conversion
-          // Check if it already has nodes/edges (unlikely for AI output but possible if saved draft)
+          let sanitized;
           if (jsonData.nodes && jsonData.edges) {
-            setNodes(jsonData.nodes);
-            setEdges(jsonData.edges);
-            setGenogramData(jsonData);
+            sanitized = sanitizeGenogramData(jsonData);
           } else {
             // Convert AI output to ReactFlow
-            const { nodes: newNodes, edges: newEdges } = convertToReactFlow(jsonData);
-            setNodes(newNodes);
-            setEdges(newEdges);
-            setGenogramData({ nodes: newNodes, edges: newEdges });
+            const converted = convertToReactFlow(jsonData);
+            sanitized = sanitizeGenogramData(converted);
           }
+
+          setNodes(sanitized.nodes);
+          setEdges(sanitized.edges);
+          setGenogramData(sanitized);
           setTimeout(() => fitView({ padding: 0.2 }), 500);
         } catch (e) {
           console.error('Draft load error:', e);
@@ -138,20 +140,29 @@ function GenogramEditorContent() {
             // Check for Combined Data Format
             if (jsonData.genogram || jsonData.bodyMap) {
               if (jsonData.genogram) {
-                const { nodes: newNodes, edges: newEdges } = convertToReactFlow(jsonData.genogram);
-                setNodes(newNodes);
-                setEdges(newEdges);
-                setGenogramData({ nodes: newNodes, edges: newEdges });
+                let dataToUse = jsonData.genogram;
+                // If data is raw AI format, convert first
+                if (!dataToUse.nodes || !Array.isArray(dataToUse.nodes)) {
+                  dataToUse = convertToReactFlow(dataToUse);
+                }
+                const sanitized = sanitizeGenogramData(dataToUse);
+                setNodes(sanitized.nodes);
+                setEdges(sanitized.edges);
+                setGenogramData(sanitized);
               }
               if (jsonData.bodyMap) {
                 setBodyMapData(jsonData.bodyMap);
               }
             } else {
               // Legacy Format (Just Genogram data directly)
-              const { nodes: newNodes, edges: newEdges } = convertToReactFlow(jsonData);
-              setNodes(newNodes);
-              setEdges(newEdges);
-              setGenogramData({ nodes: newNodes, edges: newEdges });
+              let dataToUse = jsonData;
+              if (!dataToUse.nodes || !Array.isArray(dataToUse.nodes)) {
+                dataToUse = convertToReactFlow(dataToUse);
+              }
+              const sanitized = sanitizeGenogramData(dataToUse);
+              setNodes(sanitized.nodes);
+              setEdges(sanitized.edges);
+              setGenogramData(sanitized);
             }
 
             setTimeout(() => {

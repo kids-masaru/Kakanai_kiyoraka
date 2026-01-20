@@ -201,5 +201,100 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         });
     });
 
+
     return { nodes, edges };
+};
+
+export const sanitizeGenogramData = (data: any): { nodes: Node[], edges: Edge[] } => {
+    console.log('Sanitizing Genogram Data...');
+
+    if (!data || typeof data !== 'object') {
+        console.warn('Invalid data format: not an object');
+        return { nodes: [], edges: [] };
+    }
+
+    const validNodes: Node[] = [];
+    const nodeIds = new Set<string>();
+
+    const inputNodes = Array.isArray(data.nodes) ? data.nodes : [];
+
+    inputNodes.forEach((node: any, idx: number) => {
+        // 1. Basic Node Validation
+        if (!node || typeof node !== 'object') return;
+
+        // Ensure ID
+        const id = node.id || `node-safe-${idx}`;
+
+        // 2. Data/Person Validation
+        // If it's a 'person' type, it MUST have data.person
+        if (node.type === 'person') {
+            if (!node.data || !node.data.person) {
+                console.warn(`Node ${id} dropped: Missing person data`);
+                return;
+            }
+
+            // Validate Person fields
+            const p = node.data.person;
+
+            // Ensure optional fields are safe
+            const safePerson = {
+                ...p,
+                id: p.id || id,
+                name: p.name || '不明',
+                // CRITICAL: Ensure gender is valid (M, F, U)
+                gender: (p.gender === 'M' || p.gender === 'F') ? p.gender : 'U',
+                isDeceased: !!p.isDeceased,
+                isSelf: !!p.isSelf,
+                isKeyPerson: !!p.isKeyPerson,
+                generation: typeof p.generation === 'number' ? p.generation : 0,
+            };
+
+            validNodes.push({
+                ...node,
+                id: id,
+                data: { ...node.data, person: safePerson },
+                // Ensure position is safe
+                position: node.position || { x: 0, y: 0 }
+            });
+        }
+        // Marriage/Household nodes - simpler validation
+        else if (node.type === 'marriage' || node.type === 'household') {
+            validNodes.push({
+                ...node,
+                id: id,
+                position: node.position || { x: 0, y: 0 }
+            });
+        }
+        // Unknown types - pass through but ensure ID/Position
+        else {
+            validNodes.push({
+                ...node,
+                id: id,
+                position: node.position || { x: 0, y: 0 }
+            });
+        }
+
+        nodeIds.add(id);
+    });
+
+    // 3. Edge Validation
+    const inputEdges = Array.isArray(data.edges) ? data.edges : [];
+    const validEdges: Edge[] = [];
+
+    inputEdges.forEach((edge: any, idx: number) => {
+        if (!edge || typeof edge !== 'object') return;
+
+        // Ensure Source/Target exist in validNodes
+        if (nodeIds.has(edge.source) && nodeIds.has(edge.target)) {
+            validEdges.push({
+                ...edge,
+                id: edge.id || `edge-safe-${idx}`
+            });
+        } else {
+            console.warn(`Edge dropped: Source(${edge.source}) or Target(${edge.target}) missing`);
+        }
+    });
+
+    console.log(`Sanitization Complete. Valid Nodes: ${validNodes.length}, Valid Edges: ${validEdges.length}`);
+    return { nodes: validNodes, edges: validEdges };
 };
