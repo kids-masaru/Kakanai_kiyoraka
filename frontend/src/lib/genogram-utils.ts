@@ -10,7 +10,7 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         // Filter out null/undefined nodes first
         const validNodes = data.nodes.filter((n: any) => n && typeof n === 'object');
 
-        // --- 0. Pre-process Sibling Edges -> Implicit Parents (Couple) ---
+        // --- A. Handle Sibling Groups (Create Gen -1 Parents) ---
         const edges: Edge[] = [];
         const additionalNodes: Node[] = [];
         const rawInputEdges = data.edges || [];
@@ -19,6 +19,15 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         const getNodeLabel = (id: string): string => {
             const node = validNodes.find((n: any) => n.id === id);
             return node?.data?.label || node?.data?.person?.name || '';
+        };
+
+        // Helper to find node gender
+        const getNodeGender = (id: string): 'M' | 'F' | 'U' => {
+            const node = validNodes.find((n: any) => n.id === id);
+            const p = node?.data?.person || node?.data || {};
+            if (p.gender === 'male' || p.gender === 'M') return 'M';
+            if (p.gender === 'female' || p.gender === 'F') return 'F';
+            return 'U';
         };
 
         // Helper to detect sibling edges
@@ -96,9 +105,113 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
             });
         });
 
+        // --- B. Handle Single Parents (Create Spouse & Marriage Node) ---
+        // Find "Parent" nodes that have children but valid marriage connection is missing/unclear
+        // We look for direct parent->child edges that were NOT sibling edges
+        const childrenMap = new Map<string, Set<string>>(); // ParentId -> Set<ChildId>
+        const existingSpouses = new Map<string, string>(); // ParentId -> SpouseId
+
+        rawInputEdges.forEach((e: any) => {
+            if (isSiblingEdge(e)) return;
+
+            // Check for direct parent-child link (smoothstep typically)
+            // AND check if 'marriage' type is NOT used (marriage type is straight usually)
+            if (e.type !== 'marriage' && e.type !== 'straight') {
+                if (!childrenMap.has(e.source)) childrenMap.set(e.source, new Set());
+                childrenMap.get(e.source)!.add(e.target);
+            }
+            // Check for existing marriage/partner links
+            if (e.type === 'marriage' || e.type === 'straight') {
+                // Might be a direct link to spouse?
+                // Note: Our AI Sometimes outputs "marriage" edge between Person and Person
+                existingSpouses.set(e.source, e.target);
+                existingSpouses.set(e.target, e.source);
+            }
+        });
+
+        // For each parent with children
+        childrenMap.forEach((children, parentId) => {
+            // Check if this parent already has a spouse handled in "existingSpouses"
+            // If they have a spouse, we assume the AI (or legacy logic) *should* handle the marriage node creation
+            // BUT, if the edge was "Parent -> Child" direct, we need to INTERCEPT it.
+
+            // To simplify: If we see Parent -> Child direct edge, we ALWAYS want to route it through a marriage node.
+            // If spouse is known, use/create that cluster. If unknown, create Unknown Spouse.
+
+            const spouseId = existingSpouses.get(parentId);
+            let marriageNodeId = `marriage-node-auto-${parentId}`;
+
+            // If we haven't created a marriage structure for this couple yet...
+            const existingMarriageNode = additionalNodes.find(n => n.id === marriageNodeId);
+
+            if (!existingMarriageNode) {
+                // Create Spouse if missing
+                let finalSpouseId = spouseId;
+                if (!finalSpouseId) {
+                    finalSpouseId = `implicit-spouse-of-${parentId}`;
+                    const parentGender = getNodeGender(parentId);
+                    const spouseGender = parentGender === 'F' ? 'M' : 'F'; // Opposite or default
+                    const spouseLabel = parentGender === 'F' ? '夫(不明)' : '妻(不明)';
+
+                    additionalNodes.push({
+                        id: finalSpouseId, type: 'person', position: { x: 0, y: 0 },
+                        data: { person: { id: finalSpouseId, name: spouseLabel, gender: spouseGender, generation: -999, note: '自動生成' } }
+                    });
+
+                    // Register this new relation so we don't duplicate
+                    existingSpouses.set(parentId, finalSpouseId);
+                    existingSpouses.set(finalSpouseId, parentId);
+                }
+
+                // Create Marriage Node
+                additionalNodes.push({
+                    id: marriageNodeId, type: 'marriage', position: { x: 0, y: 0 },
+                    data: { status: 'n/a' }, draggable: false
+                });
+
+                // Connect Parent -> Marriage
+                edges.push({
+                    id: `edge-auto-m-${parentId}-p1`, source: parentId, target: marriageNodeId,
+                    type: 'straight', sourceHandle: 'right-source', targetHandle: 'left-target', style: { stroke: '#333', strokeWidth: 2 }
+                });
+                // Connect Spouse -> Marriage
+                edges.push({
+                    id: `edge-auto-m-${parentId}-p2`, source: finalSpouseId!, target: marriageNodeId,
+                    type: 'straight', sourceHandle: 'left-source', targetHandle: 'right-target', style: { stroke: '#333', strokeWidth: 2 }
+                });
+            }
+
+            // Route children from Marriage Node
+            Array.from(children).forEach((childId, i) => {
+                edges.push({
+                    id: `edge-auto-child-${parentId}-${i}`, source: marriageNodeId, target: childId,
+                    type: 'smoothstep', sourceHandle: 'bottom-source', targetHandle: 'top', style: { stroke: '#333', strokeWidth: 2 }
+                });
+            });
+        });
+
+
         // Add remaining non-sibling edges
         rawInputEdges.forEach((e: any, idx: number) => {
             if (isSiblingEdge(e)) return;
+
+            // If this is a parent->child edge we already re-routed, skip it
+            if (childrenMap.has(e.source) && childrenMap.get(e.source)!.has(e.target)) return;
+
+            // If this is a marriage edge (Person->Person) that we used to generate marriage node, skip?
+            // No, strictly speaking we replaced the *structure*.
+            // If existingSpouses has a match, we might have generated new straight edges.
+            // Let's be careful. If we generated a marriage node for a pair, we shouldn't keep the direct line if it interferes?
+            // Actually, keep it simple: If we generated "auto marriage" for this parent, we rely on THAT.
+            // But we need to check if E is the "spouse link" or a "child link".
+
+            // If E is Parent->Child (smooth), we skipped above.
+            // If E is Parent->Spouse (straight/marriage):
+            // We generated `edge-auto-m-...` edges. We should possibly SKIP the original direct edge to avoid double drawing.
+            if ((e.type === 'marriage' || e.type === 'straight') && existingSpouses.get(e.source) === e.target) {
+                return; // Replaced by Marriage Node connection
+            }
+
             const isMarriage = e.type === 'marriage' || e.type === 'straight';
             edges.push({
                 id: e.id || `edge-${idx}`, source: e.source, target: e.target,
@@ -116,10 +229,11 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         const nodeIds = new Set(allNodes.map((n: any) => n.id));
         const finalEdges = edges;
 
-        // Root detection (excluding straight/marriage edges)
+        // Root detection
         const hasParent = new Set<string>();
         finalEdges.forEach((e: any) => {
             if (e.target && e.type === 'smoothstep' && nodeIds.has(e.target)) hasParent.add(e.target);
+            // Note: Marriage 'straight' edges don't count as parent-child
         });
         const roots = allNodes.filter((n: any) => !hasParent.has(n.id));
 
@@ -133,6 +247,8 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
             nodeGenerations[id] = gen;
             finalEdges.forEach((e: any) => {
                 if (e.source === id && e.target && nodeIds.has(e.target)) {
+                    // Straight/Marriage = Same Generation
+                    // Smoothstep = Next Generation
                     const isSameGen = e.type === 'straight' || e.type === 'marriage';
                     const nextGen = isSameGen ? gen : gen + 1;
                     if (!visited.has(e.target)) {
@@ -140,6 +256,7 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
                         queue.push({ id: e.target, gen: nextGen });
                     }
                 } else if ((e.type === 'straight' || e.type === 'marriage') && e.target === id && e.source && nodeIds.has(e.source)) {
+                    // Reverse marriage edge
                     const partnerId = e.source;
                     if (!visited.has(partnerId)) {
                         visited.add(partnerId);
@@ -155,12 +272,12 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
         const nodesByGen: { [gen: number]: Node[] } = {};
         allNodes.forEach((n) => {
             const pData = n.data?.person || n.data || {};
-            // Default gen from BFS or data
+            // Priority: Processed Gen > Data Gen > 0
             let gen = nodeGenerations[n.id];
             if (gen === undefined) gen = typeof pData.generation === 'number' ? pData.generation : 0;
             pData.generation = gen; // Update data reference
 
-            // Update Node Data
+            // Update Node Data with safe defaults
             n.data = n.type === 'marriage' ? { status: n.data.status } : {
                 person: {
                     ...pData,
@@ -187,59 +304,43 @@ export const convertToReactFlow = (data: any): { nodes: Node[], edges: Edge[] } 
             let currentX = 100 + (gen * 50); // Slight skew
             const y = 100 + (gen * 180);
 
-            // 1. Place Couples First (connected by straight edges)
-            // Identify couples: Find 'straight' edges within this generation
-            const couples: { p1: string, p2: string, marriageNode?: string }[] = [];
-
-            // Helper to check if two nodes are connected by straight edge
-            // And if there is a marriage node involved (implicit or explicit)
-            // In new format, 'straight' edge usually connects Person to Person OR Person to MarriageNode.
-            // My implicit logic: Person -> MarriageNode <- Person.
-
-            // Let's iterate Marriage Nodes in this generation first?
+            // 1. Process Marriage Nodes (Couples)
             const marriageNodes = genNodes.filter(n => n.type === 'marriage');
             marriageNodes.forEach(mNode => {
-                // Find parents connected to this marriage node
+                // Identify connected parents (Sources of straight edges to M)
                 const parents = finalEdges.filter(e => e.target === mNode.id && e.type === 'straight').map(e => e.source);
-                // We expect 2 parents usually
-                if (parents.length >= 1) {
-                    // Place Parent1, MarriageNode, Parent2
-                    const p1 = parents[0];
-                    const p2 = parents[1]; // might be undefined
 
+                // Expecting usually 2 parents
+                if (parents.length > 0) {
+                    const p1 = parents[0];
+                    const p2 = parents.length > 1 ? parents[1] : null;
+
+                    // Place Parent 1
                     if (!processedNodes.has(p1)) {
                         nodePositions.set(p1, { x: currentX, y });
                         processedNodes.add(p1);
                         currentX += 180;
                     }
-
-                    // Marriage Node (Middle)
-                    // Re-calc avg position later? Or simply place beside?
-                    // Let's place explicitly: P1 -> M -> P2
                     const p1Pos = nodePositions.get(p1)!;
 
-                    let mX = currentX;
-                    // If p2 exists, place p2, then center M
+                    // Place Parent 2 (Spouse)
                     if (p2 && !processedNodes.has(p2)) {
-                        currentX += 100; // Space for M
-                        nodePositions.set(p2, { x: currentX, y });
+                        nodePositions.set(p2, { x: currentX + 100, y }); // Gap for M
                         processedNodes.add(p2);
                         const p2Pos = nodePositions.get(p2)!;
-                        mX = (p1Pos.x + p2Pos.x) / 2;
-                        currentX += 180;
+                        // M is centered
+                        nodePositions.set(mNode.id, { x: (p1Pos.x + p2Pos.x) / 2, y });
+                        currentX = p2Pos.x + 180;
                     } else {
-                        // Only p1 (single parent?) or p2 already placed
-                        // Just place M next to P1
-                        mX = p1Pos.x + 100;
-                        currentX += 100; // advance
+                        // Single parent attached to marriage node? (Rare with our logic, but robust fallback)
+                        nodePositions.set(mNode.id, { x: p1Pos.x + 100, y });
+                        currentX += 100 + 100;
                     }
-
-                    nodePositions.set(mNode.id, { x: mX, y });
                     processedNodes.add(mNode.id);
                 }
             });
 
-            // 2. Place remaining nodes
+            // 2. Place remaining loose nodes
             genNodes.forEach(n => {
                 if (!processedNodes.has(n.id)) {
                     nodePositions.set(n.id, { x: currentX, y });
