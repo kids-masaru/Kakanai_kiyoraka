@@ -15,6 +15,7 @@ import {
     FileArchive,
     Gear
 } from "@phosphor-icons/react";
+import Header from "@/components/Header";
 
 interface MergeFile {
     file: File;
@@ -248,6 +249,7 @@ export default function PdfToolPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
+            <Header />
 
             {/* Main Content */}
             <main className="flex-grow p-4 md:p-8">
