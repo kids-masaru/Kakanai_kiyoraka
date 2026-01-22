@@ -188,7 +188,7 @@ export default function PdfToolPage() {
 
     // --- Helpers ---
     const downloadFile = (data: Uint8Array | Blob, filename: string, mimeType: string) => {
-        const blob = data instanceof Blob ? data : new Blob([data], { type: mimeType });
+        const blob = data instanceof Blob ? data : new Blob([data as any], { type: mimeType });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
